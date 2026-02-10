@@ -1,2 +1,2 @@
-# ml-report
-A python library to automatically generate reports for scikit-learn models
+# mlreport
+A python library to automatically generate useful reports for scikit-learn models

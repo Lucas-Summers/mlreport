@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mlreport"
+version = "0.0.1"
+description = "Automated report generation for scikit-learn models"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+authors = [{ name = "Lucas Summers", email = "lsumme01@calpoly.edu" },
+           { name = "Alex Dekhtyar", email = "dekhtyar@calpoly.edu" }]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "jinja2",
+    "weasyprint",
+
+]
+
+[project.urls]
+Homepage = "https://github.com/Lucas-Summers/mlreport"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mlreport"]
