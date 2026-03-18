@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlreport"
@@ -11,6 +11,29 @@ license = "GPL-3.0-or-later"
 authors = [{ name = "Lucas Summers", email = "lsumme01@calpoly.edu" },
            { name = "Alex Dekhtyar", email = "dekhtyar@calpoly.edu" }]
 requires-python = ">=3.10"
+keywords = [
+    "machine-learning",
+    "scikit-learn",
+    "reporting",
+    "model-evaluation",
+    "education",
+    "calpoly",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Intended Audience :: Education",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Education",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "numpy",
     "matplotlib",
@@ -22,6 +45,13 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/Lucas-Summers/mlreport"
+Repository = "https://github.com/Lucas-Summers/mlreport"
+Issues = "https://github.com/Lucas-Summers/mlreport/issues"
+Documentation = "https://github.com/Lucas-Summers/mlreport#readme"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/mlreport"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mlreport*"]
+
+[tool.setuptools.package-data]
+mlreport = ["templates/*.html", "templates/*.md"]
