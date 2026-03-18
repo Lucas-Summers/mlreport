@@ -9,10 +9,6 @@ It supports exports to:
 - JSON
 - Markdown
 
-## Requirements
-
-- Python 3.10+
-
 ## Installation
 
 Clone the repository:
