@@ -947,6 +947,40 @@ class Report:
             return RegressionHandler()
         raise ValueError(f"Unsupported model type: {type(model).__name__}")
 
+    def _get_model_display_name(self) -> str:
+        final_step = getattr(self.model, "steps", None)
+        if isinstance(final_step, list) and final_step:
+            last_estimator = final_step[-1][1]
+            return last_estimator.__class__.__name__
+        return self.model.__class__.__name__
+
+    def _serialize_param_value(self, value):
+        if hasattr(value, "get_params") and not isinstance(value, type):
+            return value.__class__.__name__
+
+        if isinstance(value, tuple):
+            return tuple(self._serialize_param_value(item) for item in value)
+
+        if isinstance(value, list):
+            return [self._serialize_param_value(item) for item in value]
+
+        if isinstance(value, dict):
+            return {
+                key: self._serialize_param_value(item) for key, item in value.items()
+            }
+
+        rendered = str(value)
+        if len(rendered) > 80:
+            return f"{rendered[:77]}..."
+        return value
+
+    def _get_model_params(self) -> dict:
+        return {
+            key: self._serialize_param_value(value)
+            for key, value in self.model.get_params().items()
+            if key != "steps"
+        }
+
     def _to_dict(self) -> dict:
         """
         Convert report state to a renderer-friendly dictionary.
@@ -997,14 +1031,10 @@ class Report:
                 "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
             },
             "model": {
-                "name": self.model.__class__.__name__,
+                "name": self._get_model_display_name(),
                 "type": self._state.handler.__class__.__name__.replace("Handler", ""),
                 "version": sklearn.__version__,
-                "params": {
-                    key: value
-                    for key, value in self.model.get_params().items()
-                    if key != "steps"
-                },
+                "params": self._get_model_params(),
             },
             "data": {
                 "features": n_features,

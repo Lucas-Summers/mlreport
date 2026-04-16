@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
+import warnings
 from io import BytesIO
 from pathlib import Path
 
@@ -81,6 +83,10 @@ def render_pdf(report_type: str, theme: str, context: dict, path: str | None = N
     from weasyprint import HTML
 
     html = render_html(report_type, theme, context, path=None)
+    warnings.filterwarnings("ignore")
+    logging.getLogger("weasyprint").setLevel(logging.ERROR)
+    logging.getLogger("fontTools").setLevel(logging.ERROR)
+
     if path is not None:
         HTML(string=html).write_pdf(str(_ensure_parent_dir(path)))
         return True
