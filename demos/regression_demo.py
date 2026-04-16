@@ -26,4 +26,4 @@ report.add_split("train", X_train, y_train, y_pred_train)  # type: ignore
 report.add_split("test", X_test, y_test, y_pred_test)  # type: ignore
 report.build().to_html("reports/report.html").to_pdf("reports/report.pdf").to_md(
     "reports/report.md"
-).to_json("reports/report.json")
+).to_json("reports/report.json").summary()

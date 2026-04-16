@@ -1,0 +1,21 @@
+:root {
+    --main-fg: #e4e4e7;
+    --main-bg: #18181b;
+    --page-bg: #09090b;
+    --header-bg: linear-gradient(135deg, #1e1e24 0%, #27272a 100%);
+    --border-soft: rgba(255, 255, 255, 0.08);
+    --border-faint: rgba(255, 255, 255, 0.06);
+    --table-header-bg: rgba(255, 255, 255, 0.03);
+    --hover-bg: rgba(255, 255, 255, 0.02);
+    --muted-fg: #a1a1aa;
+    --footer-bg: #131316;
+    --footer-fg: #52525b;
+    --footer-link: #71717a;
+    --shadow-outer: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --shadow-inner: 0 0 0 1px rgba(255, 255, 255, 0.05);
+    --lightbox-bg: rgba(0, 0, 0, 0.9);
+    --lightbox-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --plot-border: rgba(255, 255, 255, 0.08);
+    --warning-fg: #f97316;
+    --success-fg: #22c55e;
+}

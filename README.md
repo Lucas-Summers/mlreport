@@ -9,6 +9,8 @@ It supports exports to:
 - JSON
 - Markdown
 
+It also supports comparison reports built from multiple model reports.
+
 ## Installation
 
 Clone the repository:
@@ -95,3 +97,41 @@ report.to_md("file.md")
 report.to_json("file.json")
 report.to_pdf("file.pdf")
 ```
+
+Themes are now stylesheet-based. The built-in `light` and `dark` themes select
+different CSS files while sharing the same report template.
+
+## Model comparison
+
+Build the individual reports first, then compare them:
+
+```python
+from mlreport import ComparisonReport, Report
+
+report_a = (
+    Report(model_a, title="Baseline", theme="light")
+    .add_split("test", X_test, y_test)
+    .build()
+)
+
+report_b = (
+    Report(model_b, title="Candidate", theme="light")
+    .add_split("test", X_test, y_test)
+    .build()
+)
+
+comparison = ComparisonReport(
+    reports=[report_a, report_b],
+    title="Model Comparison",
+    split="test",
+    theme="light",
+).build()
+
+comparison.summary()
+comparison.to_html("comparison.html")
+comparison.to_md("comparison.md")
+comparison.to_json("comparison.json")
+comparison.to_pdf("comparison.pdf")
+```
+
+`reports[0]` is treated as the baseline model when displaying deltas.

@@ -6,36 +6,10 @@ from abc import ABC
 import matplotlib.pyplot as plt
 import numpy as np
 
+from ..theme import get_palette, get_plot_colors
+
 
 class ModelHandler(ABC):
-    def _palette_from_cmap(self, n_colors: int) -> list:
-        """
-        Build a subtle sampled color palette from the active colormap.
-
-        Args:
-            n_colors: Number of colors to generate.
-
-        Returns:
-            List of RGBA tuples sampled from the colormap.
-        """
-        cmap_name = getattr(self, "_plot_cmap", "viridis")
-        cmap = plt.get_cmap(cmap_name)
-        if n_colors <= 1:
-            stops = np.asarray([0.6], dtype=float)
-        else:
-            stops = np.linspace(0.15, 0.85, n_colors)
-        return [cmap(float(stop)) for stop in stops]
-
-    def attach_extra_metrics(self, metrics: dict, splits: dict) -> None:
-        """
-        Hook for subclasses to append non-scalar metric structures.
-
-        Args:
-            metrics: Metric result dictionary to enrich.
-            splits: Data splits used for metric computation.
-        """
-        return None
-
     @classmethod
     def _discover(cls, prefix: str) -> dict[str, str]:
         """
@@ -74,33 +48,59 @@ class ModelHandler(ABC):
         """
         return cls._discover("plot_")
 
-    def compute_metrics(self, splits: dict, exclude: list[str]) -> dict:
+    def build_metrics(self, splits: dict, exclude: list[str], cv=None) -> dict:
         """
         Compute all discovered metrics for the given data splits.
 
         Args:
             splits: Mapping of split names to their data.
             exclude: Metric IDs to skip.
+            cv: Optional cross-validation splitter. When provided, metrics are
+                summarized fold-by-fold under the ``cv`` split.
 
         Returns:
-            Dict keyed by metric ID with ``name`` and ``values`` entries.
+            Dict keyed by metric ID with ``name``, ``values``, and any
+            additional metadata returned by the metric function.
         """
-        results = {}
+        if not splits:
+            return {}
+
+        if cv is not None:
+            first_split = next(iter(splits.values()))
+            X, y, y_pred = first_split
+        else:
+            X, y, y_pred = None, None, None
+
+        metrics = {}
         for metric_id, display_name in self._metrics().items():
             if metric_id in exclude:
                 continue
-            method = getattr(self, f"metric_{metric_id}")
-            results[metric_id] = {
-                "name": display_name,
-                "values": method(splits),
-            }
-        self.attach_extra_metrics(results, splits)
-        return results
 
-    def generate_plots(
+            if cv is None:
+                metric_result = getattr(self, f"metric_{metric_id}")(splits)
+            else:
+                metric_result = self._build_cv_metric_values(
+                    metric_id=metric_id,
+                    X=X,
+                    y=y,
+                    y_pred=y_pred,
+                    cv=cv,
+                )
+
+            if isinstance(metric_result, dict) and "values" in metric_result:
+                metric_payload = dict(metric_result)
+            else:
+                metric_payload = {"values": metric_result}
+
+            metric_payload["name"] = display_name
+            metrics[metric_id] = metric_payload
+
+        return metrics
+
+    def build_plots(
         self,
         splits: dict,
-        colors: tuple[str, str],
+        theme: str,
         exclude: list[str],
         cmap: str = "viridis",
     ) -> dict:
@@ -109,7 +109,7 @@ class ModelHandler(ABC):
 
         Args:
             splits: Mapping of split names to their data.
-            colors: foreground and background colors applied to each figure.
+            theme: Theme name used to derive plot foreground/background colors.
             exclude: Plot IDs to skip.
             cmap: Colormap name used for plot color styling.
 
@@ -117,9 +117,9 @@ class ModelHandler(ABC):
             Dict keyed by plot ID with ``name`` and ``fig`` entries.
         """
         results = {}
-        plot_fg, plot_bg = colors
+        plot_fg, plot_bg = get_plot_colors(theme)
         self._plot_cmap = cmap
-        palette = self._palette_from_cmap(max(len(splits), 1))
+        palette = get_palette(cmap, max(len(splits), 3))
         for plot_id, display_name in self._plots().items():
             if plot_id in exclude:
                 continue
@@ -137,61 +137,68 @@ class ModelHandler(ABC):
 
             method = getattr(self, f"plot_{plot_id}")
             method(ax, splits)
-            ax.set_title(display_name)
+            for plot_ax in fig.axes:
+                legend = plot_ax.get_legend()
+                if legend is not None:
+                    handles, labels = plot_ax.get_legend_handles_labels()
+                    plot_ax.legend(handles, labels, loc="upper right")
+            target_ax = fig.axes[0] if fig.axes else ax
+            target_ax.set_title(display_name)
+            fig.tight_layout()
             results[plot_id] = {"name": display_name, "fig": fig}
 
         return results
 
-    def compute_cv_metrics(self, splits: dict, cv, exclude: list[str]) -> dict:
+    def _build_cv_metric_values(self, metric_id: str, X, y, y_pred, cv) -> dict:
         """
-        Compute fold-level metric summaries for cross-validation.
+        Build the standard ``values`` payload for a CV metric summary.
 
         Args:
-            splits: Mapping containing the cross-validation data split.
-            cv: Cross-validation splitter with ``split(X, y)``.
-            exclude: Metric IDs to skip.
+            metric_id: Metric identifier to compute.
+            X: Full feature matrix.
+            y: Full target array.
+            y_pred: Out-of-fold predictions aligned with ``y``.
+            cv: Cross-validation splitter.
 
         Returns:
-            Metric dict in standard report format with CV summary under
-            values['cv'] as scores/mean/std/min/max.
+            Dict containing the normalized metric payload with a ``values`` key.
         """
-        if not splits:
-            return {}
+        method = getattr(self, f"metric_{metric_id}")
+        fold_scores = []
+        metric_meta = {}
 
-        first_split = next(iter(splits.values()))
-        X, y, y_pred = first_split
-
-        metrics = {}
-        for metric_id, display_name in self._metrics().items():
-            if metric_id in exclude:
-                continue
-
-            method = getattr(self, f"metric_{metric_id}")
-            fold_scores = []
-
-            for _, test_idx in cv.split(X, y):
-                fold_split = {
-                    "cv": (
-                        np.asarray(X)[test_idx],
-                        np.asarray(y)[test_idx],
-                        np.asarray(y_pred)[test_idx],
-                    )
-                }
-                fold_value = method(fold_split)["cv"]
-                fold_scores.append(float(fold_value))
-
-            summary = {
-                "scores": fold_scores,
-                "mean": float(np.mean(fold_scores)),
-                "std": float(np.std(fold_scores, ddof=0)),
-                "min": float(np.min(fold_scores)),
-                "max": float(np.max(fold_scores)),
+        for _, test_idx in cv.split(X, y):
+            fold_split = {
+                "cv": (
+                    np.asarray(X)[test_idx],
+                    np.asarray(y)[test_idx],
+                    np.asarray(y_pred)[test_idx],
+                )
             }
+            fold_metric = method(fold_split)
+            fold_values = (
+                fold_metric["values"]
+                if isinstance(fold_metric, dict) and "values" in fold_metric
+                else fold_metric
+            )
+            if not metric_meta and isinstance(fold_metric, dict) and "values" in fold_metric:
+                metric_meta.update(
+                    {
+                        key: value
+                        for key, value in fold_metric.items()
+                        if key != "values"
+                    }
+                )
+            fold_value = fold_values["cv"]
+            fold_scores.append(float(fold_value))
 
-            metrics[metric_id] = {
-                "name": display_name,
-                "values": {"cv": summary},
-            }
-
-        self.attach_extra_metrics(metrics, splits)
-        return metrics
+        summary = {
+            "scores": fold_scores,
+            "mean": float(np.mean(fold_scores)),
+            "std": float(np.std(fold_scores, ddof=0)),
+            "min": float(np.min(fold_scores)),
+            "max": float(np.max(fold_scores)),
+        }
+        metric_payload = dict(metric_meta)
+        metric_payload["values"] = {"cv": summary}
+        return metric_payload

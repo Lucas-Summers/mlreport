@@ -47,4 +47,4 @@ report.add_search(search)
 
 report.build().to_html("reports/report.html").to_pdf("reports/report.pdf").to_md(
     "reports/report.md"
-).to_json("reports/report.json")
+).to_json("reports/report.json").summary()

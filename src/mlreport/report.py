@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import base64
-import json
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from io import BytesIO
 from numbers import Number
 from pathlib import Path
 from typing import cast
@@ -13,7 +9,6 @@ from typing import cast
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn
-from jinja2 import Environment, FileSystemLoader
 from sklearn.base import is_classifier, is_clusterer, is_regressor
 from sklearn.model_selection import cross_val_predict
 
@@ -21,8 +16,15 @@ from .handlers.base import ModelHandler
 from .handlers.classification import ClassificationHandler
 from .handlers.clustering import ClusteringHandler
 from .handlers.regression import RegressionHandler
-
-TEMPLATE_DIR = Path(__file__).parent / "templates"
+from .render import (
+    fig_to_base64,
+    fig_to_file,
+    render_html,
+    render_json,
+    render_md,
+    render_pdf,
+)
+from .theme import get_plot_colors
 
 
 @dataclass
@@ -228,18 +230,15 @@ class Report:
                 "No data splits added. Use add_split() or add_crossval() first."
             )
 
-        if self._state.cv is not None:
-            self._state.metrics = self._state.handler.compute_cv_metrics(
-                self._state.splits, self._state.cv, exclude_metrics or []
-            )
-        else:
-            self._state.metrics = self._state.handler.compute_metrics(
-                self._state.splits, exclude_metrics or []
-            )
-
-        self._state.plots = self._state.handler.generate_plots(
+        self._state.metrics = self._state.handler.build_metrics(
             self._state.splits,
-            self._get_plot_colors(),
+            exclude_metrics or [],
+            cv=self._state.cv,
+        )
+
+        self._state.plots = self._state.handler.build_plots(
+            self._state.splits,
+            self.theme,
             exclude_plots or [],
             cmap=self.cmap,
         )
@@ -377,7 +376,7 @@ class Report:
         plots_with_images = {
             plot_id: {
                 "name": plot_data["name"],
-                "image": self._fig_to_base64(plot_data["fig"]),
+                "image": fig_to_base64(plot_data["fig"]),
             }
             for plot_id, plot_data in self._state.plots.items()
         }
@@ -388,16 +387,12 @@ class Report:
         context["tuning"]["plots"] = {
             plot_id: {
                 "name": plot_data["name"],
-                "image": self._fig_to_base64(plot_data["fig"]),
+                "image": fig_to_base64(plot_data["fig"]),
             }
             for plot_id, plot_data in self._state.tuning["plots"].items()
         }
 
-        template = self._get_template(f"{self.theme}.html")
-        html = template.render(**context)
-
-        with open(path, "w") as f:
-            f.write(html)
+        render_html("report", self.theme, context, path=path)
 
         return self
 
@@ -413,12 +408,10 @@ class Report:
         """
         self._require_built()
 
-        from weasyprint import HTML
-
         plots_with_images = {
             plot_id: {
                 "name": plot_data["name"],
-                "image": self._fig_to_base64(plot_data["fig"]),
+                "image": fig_to_base64(plot_data["fig"]),
             }
             for plot_id, plot_data in self._state.plots.items()
         }
@@ -429,15 +422,12 @@ class Report:
         context["tuning"]["plots"] = {
             plot_id: {
                 "name": plot_data["name"],
-                "image": self._fig_to_base64(plot_data["fig"]),
+                "image": fig_to_base64(plot_data["fig"]),
             }
             for plot_id, plot_data in self._state.tuning["plots"].items()
         }
 
-        template = self._get_template(f"{self.theme}.html")
-        html = template.render(**context)
-
-        HTML(string=html).write_pdf(path)
+        render_pdf("report", self.theme, context, path=path)
         return self
 
     def to_json(self, path: str) -> Report:
@@ -457,8 +447,7 @@ class Report:
         if isinstance(data.get("tuning"), dict):
             data["tuning"].pop("plots", None)
 
-        with open(path, "w") as f:
-            json.dump(data, f, indent=4)
+        render_json("report", self.theme, data, path=path)
 
         return self
 
@@ -483,7 +472,7 @@ class Report:
         plots_with_paths = {}
         for plot_id, plot_data in self._state.plots.items():
             img_path = f"{image_dir}/{plot_id}.png"
-            self._fig_to_file(plot_data["fig"], img_path)
+            fig_to_file(plot_data["fig"], img_path)
             plots_with_paths[plot_id] = {
                 "name": plot_data["name"],
                 "path": img_path,
@@ -495,18 +484,14 @@ class Report:
         tuning_plot_paths = {}
         for plot_id, plot_data in self._state.tuning["plots"].items():
             img_path = f"{image_dir}/tuning_{plot_id}.png"
-            self._fig_to_file(plot_data["fig"], img_path)
+            fig_to_file(plot_data["fig"], img_path)
             tuning_plot_paths[plot_id] = {
                 "name": plot_data["name"],
                 "path": img_path,
             }
         context["tuning"]["plots"] = tuning_plot_paths
 
-        template = self._get_template("report.md")
-        md = template.render(**context)
-
-        with open(path, "w") as f:
-            f.write(md)
+        render_md("report", self.theme, context, path=path)
 
         return self
 
@@ -518,18 +503,12 @@ class Report:
             raise ValueError("Call build() first.")
 
     def _get_plot_colors(self) -> tuple[str, str]:
-        """Extract --main-fg and --main-bg CSS variables from the template.
+        """Return theme-derived plot foreground/background colors.
 
         Returns:
             Foreground and background hex colors.
         """
-        template_path = TEMPLATE_DIR / f"{self.theme}.html"
-        text = template_path.read_text()
-        fg_match = re.search(r"--main-fg\s*:\s*(#[0-9a-fA-F]{3,8})", text)
-        bg_match = re.search(r"--main-bg\s*:\s*(#[0-9a-fA-F]{3,8})", text)
-        fg = fg_match.group(1) if fg_match else "#000000"
-        bg = bg_match.group(1) if bg_match else "#ffffff"
-        return (fg, bg)
+        return get_plot_colors(self.theme)
 
     def _get_search_score_column(self, cv_results: dict, search_cv) -> str:
         refit_metric = getattr(search_cv, "refit", None)
@@ -968,62 +947,6 @@ class Report:
             return RegressionHandler()
         raise ValueError(f"Unsupported model type: {type(model).__name__}")
 
-    def _get_template(self, name: str):
-        """
-        Load a Jinja2 template.
-
-        Args:
-            name: Template filename.
-
-        Returns:
-            Loaded Jinja2 template object.
-        """
-        env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
-        return env.get_template(name)
-
-    def _fig_to_base64(self, fig) -> str:
-        """
-        Convert matplotlib figure to a base64-encoded PNG string.
-
-        Args:
-            fig: Matplotlib figure object.
-
-        Returns:
-            Base64-encoded image payload.
-        """
-        buf = BytesIO()
-        fig.savefig(
-            buf,
-            format="png",
-            dpi=100,
-            facecolor=fig.get_facecolor(),
-            edgecolor="none",
-        )
-        buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode("utf-8")
-        plt.close(fig)
-        return b64
-
-    def _fig_to_file(self, fig, path: str) -> str:
-        """
-        Save a matplotlib figure to disk.
-
-        Args:
-            fig: Matplotlib figure object.
-            path: Target image file path.
-
-        Returns:
-            Written image path.
-        """
-        fig.savefig(
-            path,
-            dpi=100,
-            facecolor=fig.get_facecolor(),
-            edgecolor="none",
-        )
-        plt.close(fig)
-        return path
-
     def _to_dict(self) -> dict:
         """
         Convert report state to a renderer-friendly dictionary.
@@ -1094,3 +1017,14 @@ class Report:
                 "plots": self._state.tuning["plots"],
             },
         }
+
+    def to_dict(self) -> dict:
+        """
+        Convert the built report into a public renderer-friendly dictionary.
+
+        Returns:
+            Report payload with metadata, model info, data summary, metrics,
+            and tuning details.
+        """
+        self._require_built()
+        return self._to_dict()

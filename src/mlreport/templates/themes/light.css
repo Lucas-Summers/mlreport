@@ -1,0 +1,21 @@
+:root {
+    --main-fg: #1a1a1a;
+    --main-bg: #ffffff;
+    --page-bg: #f5f5f5;
+    --header-bg: linear-gradient(135deg, #f8f8f8 0%, #eeeeee 100%);
+    --border-soft: rgba(0, 0, 0, 0.08);
+    --border-faint: rgba(0, 0, 0, 0.06);
+    --table-header-bg: rgba(0, 0, 0, 0.02);
+    --hover-bg: rgba(0, 0, 0, 0.02);
+    --muted-fg: #666666;
+    --footer-bg: #f8f8f8;
+    --footer-fg: #888888;
+    --footer-link: #666666;
+    --shadow-outer: 0 4px 24px rgba(0, 0, 0, 0.08);
+    --shadow-inner: 0 0 0 1px rgba(0, 0, 0, 0.05);
+    --lightbox-bg: rgba(0, 0, 0, 0.85);
+    --lightbox-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --plot-border: rgba(0, 0, 0, 0.08);
+    --warning-fg: #dc2626;
+    --success-fg: #16a34a;
+}

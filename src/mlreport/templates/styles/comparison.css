@@ -1,0 +1,108 @@
+.container {
+    max-width: 1100px;
+}
+
+.models-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.model-card {
+    border: 1px solid var(--border-faint);
+    border-radius: 10px;
+    padding: 18px;
+    background: var(--table-header-bg);
+}
+
+.model-card.baseline {
+    border-color: var(--success-fg);
+}
+
+.model-card h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.model-card dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    font-size: 13px;
+}
+
+.model-card dt {
+    color: var(--muted-fg);
+}
+
+.model-card dd {
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+}
+
+.comparison-plots-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.comparison-plot-card {
+    border: 1px solid var(--border-faint);
+    border-radius: 10px;
+    padding: 18px;
+    background: var(--table-header-bg);
+}
+
+.comparison-plot-card h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+}
+
+.comparison-plot-stack {
+    display: grid;
+    gap: 16px;
+}
+
+.comparison-plot-item img {
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+    border: 1px solid var(--plot-border);
+    cursor: pointer;
+}
+
+.lightbox {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--lightbox-bg);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.lightbox.active {
+    display: flex;
+}
+
+.lightbox img {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 8px;
+    box-shadow: var(--lightbox-shadow);
+}
+
+@media (max-width: 900px) {
+    .comparison-plots-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media print {
+    .lightbox {
+        display: none !important;
+    }
+}

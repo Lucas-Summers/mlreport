@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>
+            {% if meta.title %}{{ meta.title }}{% else %}Comparison Report{% endif %}
+        </title>
+        <style>
+            {{ base_css }}
+            {{ page_css }}
+            {{ theme_css }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>{% if meta.title %}{{ meta.title }}{% else %}Comparison Report{% endif %}</h1>
+                <div class="meta">
+                    {% if meta.author %}{{ meta.author }}{% endif %}
+                    {% if not meta.author %}Generated {{ meta.generated_at }}{% endif %}
+                    {% if meta.description %}
+                    <p>{{ meta.description }}</p>
+                    {% endif %}
+                </div>
+            </header>
+
+            <div class="content">
+                <section>
+                    <h2>Models</h2>
+                    <div class="models-grid">
+                        {% for model in models %}
+                        <article class="model-card{% if model.is_baseline %} baseline{% endif %}">
+                            <h3>{{ model.key }}{% if model.is_baseline %} [baseline]{% endif %}</h3>
+                            <dl>
+                                {% if model.description %}
+                                <dt>Description</dt><dd>{{ model.description }}</dd>
+                                {% endif %}
+                                <dt>Type</dt><dd>{{ model.type }}</dd>
+                                <dt>Data</dt><dd>{{ model.data_label }}</dd>
+                                <dt>Tuned</dt><dd>{{ model.tuned_label }}</dd>
+                                <dt>Params</dt><dd>{{ model.param_count }}</dd>
+                            </dl>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <section>
+                    <h2>Metrics</h2>
+                    <table>
+                        <tr>
+                            <th>Metric</th>
+                            {% for model in models %}
+                            <th class="numeric">{{ model.key }}</th>
+                            {% endfor %}
+                            <th>Best</th>
+                        </tr>
+                        {% for metric in metrics %}
+                        <tr>
+                            <td>{{ metric.metric_name }}</td>
+                            {% for model in models %}
+                            <td class="numeric">
+                                {% set value = metric["values"][model.key] %}
+                                {% if model.is_baseline %}
+                                {{ "%.4f"|format(value) }}
+                                {% else %}
+                                {% set delta = metric["deltas"][model.key] %}
+                                {{ "%.4f"|format(value) }}
+                                <span class="{% if delta > 0 %}delta-positive{% elif delta < 0 %}delta-negative{% else %}delta-neutral{% endif %}">
+                                    ({{ "%+.4f"|format(delta) }})
+                                </span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                            <td>{{ metric.best_key }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </section>
+
+                {% if plots %}
+                <section>
+                    <h2>Visualizations</h2>
+                    <div class="comparison-plots-grid">
+                        {% for plot in plots %}
+                        <article class="comparison-plot-card">
+                            <h3>{{ plot.name }}</h3>
+                            <div class="comparison-plot-stack">
+                                {% for card in plot.cards %}
+                                <div class="comparison-plot-item">
+                                    <img
+                                        src="data:image/png;base64,{{ card.image }}"
+                                        alt="{{ plot.name }} - {{ card.model_key }}"
+                                        onclick="openLightbox(this.src)"
+                                    />
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endif %}
+            </div>
+
+            <footer>
+                Generated at {{ meta.generated_at }} by
+                <a href="https://github.com/Lucas-Summers/mlreport">mlreport</a>
+            </footer>
+        </div>
+
+        <div class="lightbox" onclick="closeLightbox()">
+            <img src="" alt="Enlarged plot" />
+        </div>
+
+        <script>
+            const lightbox = document.querySelector(".lightbox");
+            const lightboxImg = lightbox.querySelector("img");
+
+            function openLightbox(src) {
+                lightboxImg.src = src;
+                lightbox.classList.add("active");
+            }
+
+            function closeLightbox() {
+                lightbox.classList.remove("active");
+            }
+
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") closeLightbox();
+            });
+        </script>
+    </body>
+</html>
