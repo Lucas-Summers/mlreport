@@ -17,8 +17,12 @@
 | Metric |{% for model in models %} {{ model.key }} |{% endfor %} Best |
 |--------|{% for model in models %}-------|{% endfor %}------|
 {% for metric in metrics -%}
-| {{ metric.metric_name }} |{% for model in models %}{% set value = metric["values"][model.key] %}{% if model.is_baseline %} {{ "%.4f"|format(value) }} |{% else %} {{ "%.4f"|format(value) }} ({{ "%+.4f"|format(metric["deltas"][model.key]) }}) |{% endif %}{% endfor %} {{ metric.best_key }} |
+| {{ metric.metric_name }} |{% for model in models %}{% set value = metric["values"][model.key] %}{% set split = metric["splits"][model.key] %}{% if model.is_baseline %} {{ "%.4f"|format(value) }} ({{ split }}) |{% else %} {{ "%.4f"|format(value) }} ({{ "%+.4f"|format(metric["deltas"][model.key]) }}, {{ split }}) |{% endif %}{% endfor %} {{ metric.best_key }} |
 {% endfor %}
+
+{% if comparison.mixed_splits %}
+Metrics may be drawn from different evaluation splits across models.
+{% endif %}
 
 {% if plots %}
 ## Visualizations

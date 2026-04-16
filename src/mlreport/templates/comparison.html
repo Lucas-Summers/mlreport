@@ -62,14 +62,17 @@
                             {% for model in models %}
                             <td class="numeric">
                                 {% set value = metric["values"][model.key] %}
+                                {% set split = metric["splits"][model.key] %}
                                 {% if model.is_baseline %}
                                 {{ "%.4f"|format(value) }}
+                                <span class="delta-neutral">({{ split }})</span>
                                 {% else %}
                                 {% set delta = metric["deltas"][model.key] %}
                                 {{ "%.4f"|format(value) }}
                                 <span class="{% if delta > 0 %}delta-positive{% elif delta < 0 %}delta-negative{% else %}delta-neutral{% endif %}">
                                     ({{ "%+.4f"|format(delta) }})
                                 </span>
+                                <span class="delta-neutral">({{ split }})</span>
                                 {% endif %}
                             </td>
                             {% endfor %}
@@ -77,6 +80,11 @@
                         </tr>
                         {% endfor %}
                     </table>
+                    {% if comparison.mixed_splits %}
+                    <p style="margin-top: 10px; font-size: 13px">
+                        Metrics may be drawn from different evaluation splits across models.
+                    </p>
+                    {% endif %}
                 </section>
 
                 {% if plots %}

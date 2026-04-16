@@ -12,6 +12,7 @@ from .report import Report
 @dataclass
 class ComparisonState:
     split: str | None = None
+    mixed_splits: bool = False
     model_type: str | None = None
     models: list[dict] = field(default_factory=list)
     metrics: list[dict] = field(default_factory=list)
@@ -51,21 +52,23 @@ class ComparisonReport:
                 "All reports in a comparison must have the same model type."
             )
 
-        split = self._resolve_split(payloads)
-        metric_ids = self._get_common_scalar_metric_ids(payloads, split)
-        if not metric_ids:
-            raise ValueError(f"No shared scalar metrics found for split '{split}'.")
-
         model_keys = self._build_model_keys(payloads)
+        splits = [self._resolve_split(payload) for payload in payloads]
+        metric_ids = self._get_common_scalar_metric_ids(payloads, splits)
+        if not metric_ids:
+            raise ValueError("No compatible scalar metrics found across compared reports.")
         descriptions = [self._get_report_description(payload) for payload in payloads]
 
-        self._state.split = split
+        self._state.split = splits[0] if len(set(splits)) == 1 else None
+        self._state.mixed_splits = len(set(splits)) > 1
         self._state.model_type = next(iter(model_types))
-        self._state.models = self._build_model_rows(payloads, model_keys, descriptions)
-        self._state.metrics = self._build_metric_rows(
-            payloads, model_keys, metric_ids, split
+        self._state.models = self._build_model_rows(
+            payloads, model_keys, descriptions, splits
         )
-        self._state.plots = self._build_plots(split)
+        self._state.metrics = self._build_metric_rows(
+            payloads, model_keys, metric_ids, splits
+        )
+        self._state.plots = self._build_plots(splits)
         self._state.built = True
         return self
 
@@ -155,6 +158,7 @@ class ComparisonReport:
             "comparison": {
                 "baseline_key": self._state.models[0]["key"],
                 "split": self._state.split,
+                "mixed_splits": self._state.mixed_splits,
             },
             "models": self._state.models,
             "metrics": self._state.metrics,
@@ -164,36 +168,29 @@ class ComparisonReport:
         if not self._state.built:
             raise ValueError("Call build() first.")
 
-    def _resolve_split(self, payloads: list[dict]) -> str:
-        available_split_sets = []
-        for payload in payloads:
-            metric_values = payload["metrics"]
-            if not metric_values:
-                raise ValueError("Compared reports must include built metrics.")
+    def _resolve_split(self, payload: dict) -> str:
+        metric_values = payload["metrics"]
+        if not metric_values:
+            raise ValueError("Compared reports must include built metrics.")
 
-            first_metric = next(iter(metric_values.values()))
-            split_names = set(first_metric["values"].keys()) - {"per_class"}
-            available_split_sets.append(split_names)
-
-        common_splits = set.intersection(*available_split_sets)
-        if not common_splits:
-            raise ValueError("Compared reports do not share a common metric split.")
+        first_metric = next(iter(metric_values.values()))
+        split_names = set(first_metric["values"].keys()) - {"per_class"}
 
         if self.split is not None:
-            if self.split not in common_splits:
+            if self.split not in split_names:
                 raise ValueError(
-                    f"Split '{self.split}' is not shared by all compared reports."
+                    f"Split '{self.split}' is not available for all compared reports."
                 )
             return self.split
 
-        if "test" in common_splits:
+        if "test" in split_names:
             return "test"
-        if "cv" in common_splits:
+        if "cv" in split_names:
             return "cv"
-        return sorted(common_splits)[0]
+        raise ValueError("Compared reports must include either a 'test' or 'cv' split.")
 
     def _get_common_scalar_metric_ids(
-        self, payloads: list[dict], split: str
+        self, payloads: list[dict], splits: list[str]
     ) -> list[str]:
         baseline_metrics = payloads[0]["metrics"]
         common_ids = []
@@ -201,7 +198,7 @@ class ComparisonReport:
             if all(
                 metric_id in payload["metrics"]
                 and self._can_extract_metric_value(payload["metrics"][metric_id], split)
-                for payload in payloads
+                for payload, split in zip(payloads, splits)
             ):
                 common_ids.append(metric_id)
         return common_ids
@@ -211,17 +208,18 @@ class ComparisonReport:
         payloads: list[dict],
         model_keys: list[str],
         descriptions: list[str | None],
+        splits: list[str],
     ) -> list[dict]:
         rows = []
-        for i, (payload, model_key, description) in enumerate(
-            zip(payloads, model_keys, descriptions)
+        for i, (payload, model_key, description, split) in enumerate(
+            zip(payloads, model_keys, descriptions, splits)
         ):
             params = payload["model"].get("params", {})
             cv_folds = payload.get("data", {}).get("cv_folds")
-            if cv_folds is not None:
+            if split == "cv" and cv_folds is not None:
                 data_label = f"{cv_folds}-fold CV"
             else:
-                data_label = "Train/Test"
+                data_label = split.capitalize()
 
             tuning_summary = payload.get("tuning", {}).get("summary") or {}
             best_params = tuning_summary.get("best_params", {})
@@ -237,6 +235,7 @@ class ComparisonReport:
                     "description": description,
                     "name": payload["model"]["name"],
                     "type": payload["model"]["type"],
+                    "comparison_split": split,
                     "data_label": data_label,
                     "tuned_label": tuned_label,
                     "params": params,
@@ -268,7 +267,7 @@ class ComparisonReport:
         payloads: list[dict],
         model_keys: list[str],
         metric_ids: list[str],
-        split: str,
+        splits: list[str],
     ) -> list[dict]:
         rows = []
         baseline_key = model_keys[0]
@@ -276,7 +275,7 @@ class ComparisonReport:
             baseline_metric = payloads[0]["metrics"][metric_id]
             values = {
                 model_key: self._get_metric_value(payload["metrics"][metric_id], split)
-                for model_key, payload in zip(model_keys, payloads)
+                for model_key, payload, split in zip(model_keys, payloads, splits)
             }
             baseline_value = values[baseline_key]
             direction = baseline_metric.get("direction", "max")
@@ -291,6 +290,9 @@ class ComparisonReport:
                     "direction": direction,
                     "keys": model_keys,
                     "values": values,
+                    "splits": {
+                        model_key: split for model_key, split in zip(model_keys, splits)
+                    },
                     "deltas": {
                         model_key: float(value - baseline_value)
                         for model_key, value in values.items()
@@ -300,7 +302,7 @@ class ComparisonReport:
             )
         return rows
 
-    def _build_plots(self, split: str) -> list[dict]:
+    def _build_plots(self, splits: list[str]) -> list[dict]:
         plot_ids = self._get_comparison_plot_ids()
         if not plot_ids:
             return []
@@ -308,7 +310,7 @@ class ComparisonReport:
         plot_groups = []
         for plot_id in plot_ids:
             cards = []
-            for model, report in zip(self._state.models, self.reports):
+            for model, report, split in zip(self._state.models, self.reports, splits):
                 split_payload = {split: report._state.splits[split]}
                 plots = report._state.handler.build_plots(
                     split_payload,
