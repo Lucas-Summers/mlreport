@@ -84,8 +84,10 @@ def render_pdf(report_type: str, theme: str, context: dict, path: str | None = N
 
     html = render_html(report_type, theme, context, path=None)
     warnings.filterwarnings("ignore")
-    logging.getLogger("weasyprint").setLevel(logging.ERROR)
-    logging.getLogger("fontTools").setLevel(logging.ERROR)
+    for name in ("weasyprint", "fontTools"):
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.ERROR)
+        logger.propagate = False
 
     if path is not None:
         HTML(string=html).write_pdf(str(_ensure_parent_dir(path)))
