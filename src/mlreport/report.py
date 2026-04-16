@@ -1000,7 +1000,11 @@ class Report:
                 "name": self.model.__class__.__name__,
                 "type": self._state.handler.__class__.__name__.replace("Handler", ""),
                 "version": sklearn.__version__,
-                "params": self.model.get_params(),
+                "params": {
+                    key: value
+                    for key, value in self.model.get_params().items()
+                    if key != "steps"
+                },
             },
             "data": {
                 "features": n_features,
