@@ -9,15 +9,15 @@
 | Model | Description | Type | Data | Tuned | Params | Baseline |
 |-------|-------------|------|------|-------|--------|----------|
 {% for model in models -%}
-| {{ model.key }} | {% if model.description %}{{ model.description }}{% endif %} | {{ model.type }} | {{ model.data_label }} | {{ model.tuned_label }} | {{ model.param_count }} | {% if model.is_baseline %}Yes{% else %}No{% endif %} |
+| {{ model.key }} [{{ model.index + 1 }}] | {% if model.description %}{{ model.description }}{% endif %} | {{ model.type }} | {{ model.data_label }} | {{ model.tuned_label }} | {{ model.param_count }} | {% if model.is_baseline %}Yes{% else %}No{% endif %} |
 {% endfor %}
 
 ## Metrics
 
-| Metric |{% for model in models %} {{ model.key }} |{% endfor %} Best |
+| Metric |{% for model in models %} {% if model.key|length > 18 %}{{ model.key[:18] }}...{% else %}{{ model.key }}{% endif %} |{% endfor %} Best |
 |--------|{% for model in models %}-------|{% endfor %}------|
 {% for metric in metrics -%}
-| {{ metric.metric_name }} |{% for model in models %}{% set value = metric["values"][model.key] %}{% set split = metric["splits"][model.key] %}{% if model.is_baseline %} {{ "%.4f"|format(value) }} ({{ split }}) |{% else %} {{ "%.4f"|format(value) }} ({{ "%+.4f"|format(metric["deltas"][model.key]) }}, {{ split }}) |{% endif %}{% endfor %} {{ metric.best_key }} |
+| {{ metric.metric_name }} |{% for model in models %}{% set value = metric["values"][model.key] %}{% if model.is_baseline %} {{ "%.4f"|format(value) }} |{% else %} {{ "%.4f"|format(value) }} ({{ "%+.4f"|format(metric["deltas"][model.key]) }}) |{% endif %}{% endfor %} {{ metric.best_index }} |
 {% endfor %}
 
 {% if comparison.mixed_splits %}

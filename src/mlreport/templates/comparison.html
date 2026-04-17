@@ -31,6 +31,7 @@
                     <div class="models-grid">
                         {% for model in models %}
                         <article class="model-card{% if model.is_baseline %} baseline{% endif %}">
+                            <div class="model-card-index">{{ model.index + 1 }}</div>
                             <h3>{{ model.key }}{% if model.is_baseline %} [baseline]{% endif %}</h3>
                             <dl>
                                 {% if model.description %}
@@ -52,7 +53,7 @@
                         <tr>
                             <th>Metric</th>
                             {% for model in models %}
-                            <th class="numeric">{{ model.key }}</th>
+                            <th class="numeric">{% if model.key|length > 18 %}{{ model.key[:18] }}...{% else %}{{ model.key }}{% endif %}</th>
                             {% endfor %}
                             <th>Best</th>
                         </tr>
@@ -62,21 +63,19 @@
                             {% for model in models %}
                             <td class="numeric">
                                 {% set value = metric["values"][model.key] %}
-                                {% set split = metric["splits"][model.key] %}
                                 {% if model.is_baseline %}
                                 {{ "%.4f"|format(value) }}
-                                <span class="delta-neutral">({{ split }})</span>
                                 {% else %}
                                 {% set delta = metric["deltas"][model.key] %}
                                 {{ "%.4f"|format(value) }}
-                                <span class="{% if delta > 0 %}delta-positive{% elif delta < 0 %}delta-negative{% else %}delta-neutral{% endif %}">
+                                <br />
+                                <span class="{% if delta > 0 %}delta-positive{% elif delta < 0 %}delta-negative{% else %}delta-neutral{% endif %}" style="font-size: 12px">
                                     ({{ "%+.4f"|format(delta) }})
                                 </span>
-                                <span class="delta-neutral">({{ split }})</span>
                                 {% endif %}
                             </td>
                             {% endfor %}
-                            <td>{{ metric.best_key }}</td>
+                            <td>{{ metric.best_index }}</td>
                         </tr>
                         {% endfor %}
                     </table>

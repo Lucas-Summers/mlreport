@@ -298,6 +298,7 @@ class ComparisonReport:
                         for model_key, value in values.items()
                     },
                     "best_key": best_key,
+                    "best_index": model_keys.index(best_key) + 1,
                 }
             )
         return rows
