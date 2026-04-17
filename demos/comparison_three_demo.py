@@ -20,7 +20,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 baseline_model = LogisticRegression(max_iter=1000)
-tree_model = DecisionTreeClassifier(max_depth=5, random_state=42)
+tree_model = LogisticRegression(C=0.5, max_iter=1000)
 forest_model = RandomForestClassifier(
     n_estimators=100,
     max_depth=6,
@@ -42,7 +42,7 @@ baseline_report.add_split("test", X_test, y_test).build()  # type: ignore
 
 tree_report = Report(
     tree_model,
-    title="Decision Tree",
+    title="Logistic Regression Variant",
     author="Lucas Summers",
     description="Three-model comparison demo",
     theme="light",

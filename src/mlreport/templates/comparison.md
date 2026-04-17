@@ -14,10 +14,10 @@
 
 ## Metrics
 
-| Metric |{% for model in models %} {% if model.key|length > 18 %}{{ model.key[:18] }}...{% else %}{{ model.key }}{% endif %} |{% endfor %} Best |
+| Metric |{% for model in models %} Model {{ model.index + 1 }} |{% endfor %} Best |
 |--------|{% for model in models %}-------|{% endfor %}------|
 {% for metric in metrics -%}
-| {{ metric.metric_name }} |{% for model in models %}{% set value = metric["values"][model.key] %}{% if model.is_baseline %} {{ "%.4f"|format(value) }} |{% else %} {{ "%.4f"|format(value) }} ({{ "%+.4f"|format(metric["deltas"][model.key]) }}) |{% endif %}{% endfor %} {{ metric.best_index }} |
+| {{ metric.metric_name }} |{% for model in models %}{% set value = metric["values"][model.key] %}{% if model.is_baseline %} {{ "%.4f"|format(value) }} |{% else %} {{ "%.4f"|format(value) }} ({{ "%+.4f"|format(metric["deltas"][model.key]) }}) |{% endif %}{% endfor %} Model {{ metric.best_index }} |
 {% endfor %}
 
 {% if comparison.mixed_splits %}
