@@ -31,8 +31,11 @@
                     <div class="models-grid">
                         {% for model in models %}
                         <article class="model-card{% if model.is_baseline %} baseline{% endif %}">
-                            <div class="model-card-index">Model {{ model.index + 1 }}</div>
-                            <h3>{{ model.key }}{% if model.is_baseline %} [baseline]{% endif %}</h3>
+                            <h3>
+                                Model {{ model.index + 1 }}{% if model.is_baseline %} [baseline]{% endif %}
+                            </h3>
+                            <hr class="model-card-rule" />
+                            <div class="model-card-name">{{ model.name }}</div>
                             <dl>
                                 {% if model.description %}
                                 <dt>Description</dt><dd>{{ model.description }}</dd>

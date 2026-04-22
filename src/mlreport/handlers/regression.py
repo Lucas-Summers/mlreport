@@ -107,7 +107,32 @@ class RegressionHandler(ModelHandler):
         """Q-Q Plot"""
         from scipy import stats
 
-        first_split = next(iter(splits.values()))
-        X, y, y_pred = first_split
-        residuals = y - y_pred
-        stats.probplot(residuals, dist="norm", plot=ax)
+        for name, (X, y, y_pred) in splits.items():
+            residuals = y - y_pred
+            theoretical_q, sample_q = stats.probplot(
+                residuals,
+                dist="norm",
+                fit=False,
+            )
+            color = ax._get_lines.get_next_color()
+            line_x = np.asarray(theoretical_q, dtype=float)
+            line_y = np.sort(np.asarray(residuals, dtype=float))
+            ax.scatter(
+                theoretical_q,
+                sample_q,
+                alpha=0.5,
+                edgecolors="none",
+                color=color,
+                label=name.capitalize(),
+            )
+            ax.plot(
+                line_x,
+                line_y,
+                linestyle="--",
+                alpha=0.8,
+                color=color,
+            )
+
+        ax.set_xlabel("Theoretical Quantiles")
+        ax.set_ylabel("Ordered Values")
+        ax.legend()

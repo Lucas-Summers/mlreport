@@ -40,7 +40,7 @@ dependencies = [
     "scikit-learn",
     "jinja2",
     "weasyprint",
-
+    "jupyterlab",
 ]
 
 [project.urls]
