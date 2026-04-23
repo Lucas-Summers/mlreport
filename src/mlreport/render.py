@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from tabulate import tabulate
 
 from .theme import get_style_css, get_template, get_theme_css
 
@@ -51,7 +52,7 @@ def render_html(report_type: str, theme: str, context: dict, path: str | None = 
     html_context["page_css"] = get_style_css(f"{report_type}.css")
     html_context["theme_css"] = get_theme_css(theme)
 
-    template = get_template(f"{report_type}.html")
+    template = get_template(f"{report_type}.html", trim_blocks=True, lstrip_blocks=True)
     content = template.render(**html_context)
 
     if path is not None:
@@ -62,7 +63,25 @@ def render_html(report_type: str, theme: str, context: dict, path: str | None = 
 
 def render_md(report_type: str, theme: str, context: dict, path: str | None = None):
     del theme
-    template = get_template(f"{report_type}.md")
+    template = get_template(f"{report_type}.md", trim_blocks=True, lstrip_blocks=True)
+    content = template.render(**context)
+
+    if path is not None:
+        _ensure_parent_dir(path).write_text(content)
+        return True
+    return content
+
+
+def render_txt(report_type: str, theme: str, context: dict, path: str | None = None):
+    del theme
+    template = get_template(
+        f"{report_type}.txt",
+        trim_blocks=True,
+        lstrip_blocks=True,
+        txt_table=lambda headers, rows, colalign=None: tabulate(
+            rows, headers=headers, tablefmt="grid", colalign=colalign
+        ),
+    )
     content = template.render(**context)
 
     if path is not None:

@@ -1,16 +1,22 @@
 # {% if meta.title %}{{ meta.title }}{% else %}Comparison Report{% endif %}
 
+
 {% if meta.author %}{{ meta.author }}{% endif %}
+
 
 {% if meta.description %}{{ meta.description }}{% endif %}
 
+
+---
+
 ## Models
 
-| Model | Description | Type | Data | Tuned | Params | Baseline |
-|-------|-------------|------|------|-------|--------|----------|
+| Model | Description | Type | Data | Params | Tuned | Baseline |
+|-------|-------------|------|------|--------|-------|----------|
 {% for model in models -%}
-| {{ model.key }} [{{ model.index + 1 }}] | {% if model.description %}{{ model.description }}{% endif %} | {{ model.type }} | {{ model.data_label }} | {{ model.tuned_label }} | {{ model.param_count }} | {% if model.is_baseline %}Yes{% else %}No{% endif %} |
+| {{ model.title_name }} | {% if model.description %}{{ model.description }}{% endif %} | {{ model.type }} | {{ model.data_label }} | {{ model.param_count }} | {{ model.tuned_label }} | {% if model.is_baseline %}Yes{% else %}No{% endif %} |
 {% endfor %}
+
 
 ## Metrics
 

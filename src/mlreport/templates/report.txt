@@ -1,0 +1,161 @@
+{% set report_title = meta.title if meta.title else "Report - %s"|format(model.name) %}
+{% set report_byline = meta.author if meta.author else "Generated %s"|format(meta.generated_at) %}
+{% set header_rule_width = [report_title | length, report_byline | length, (meta.description if meta.description else "") | length] | max %}
+{{ report_title }}
+{{ report_byline }}
+{% if meta.description %}
+{{ meta.description }}
+{% endif %}
+{{ "=" * header_rule_width }}
+
+Model Overview
+{{ txt_table(
+    ["Property", "Value"],
+    [
+        ["Name", model.name],
+        ["Type", model.type],
+        ["Sklearn", model.version],
+        ["Parameter Count", model.params | length],
+    ]
+) }}
+
+Dataset Overview
+{% set dataset = namespace(rows=[
+    ["Features", data.features],
+    ["Total Observations", data.total],
+    ["CV Folds", data.cv_folds if data.cv_folds is not none else "None"],
+]) %}
+{% for split_name, count in data.splits.items() %}
+{% if split_name != "cv" %}
+{% set dataset.rows = dataset.rows + [[split_name | capitalize, "%d (%.1f%%)"|format(count, count / data.total * 100)]] %}
+{% endif %}
+{% endfor %}
+{{ txt_table(["Property", "Value"], dataset.rows) }}
+
+{% if data.class_distribution %}
+Class Distribution
+{% set first_split = data.splits.keys() | list | first %}
+{% set class_headers = namespace(values=["Class"]) %}
+{% for split_name in data.splits.keys() %}
+{% set class_headers.values = class_headers.values + [split_name | capitalize] %}
+{% endfor %}
+{% set class_headers.values = class_headers.values + ["Overall %"] %}
+{% set class_rows = namespace(values=[]) %}
+{% for class_label in data.class_distribution[first_split].keys() %}
+{% set row = namespace(values=[class_label]) %}
+{% for split_name in data.splits.keys() %}
+{% set row.values = row.values + [data.class_distribution[split_name][class_label]] %}
+{% endfor %}
+{% set row.values = row.values + ["%.1f%%"|format(data.class_percentages[class_label])] %}
+{% set class_rows.values = class_rows.values + [row.values] %}
+{% endfor %}
+{{ txt_table(class_headers.values, class_rows.values) }}
+
+{% endif %}
+Hyperparameters
+{% set tuned_params = tuning.summary.best_params if tuning.summary else {} %}
+{% set params = namespace(rows=[]) %}
+{% for key, value in model.params.items() %}
+{% set rendered_value = value if value is not none and value != "" else "None" %}
+{% if key in tuned_params %}
+{% set key = "\033[1m%s\033[0m"|format(key) %}
+{% set rendered_value = "\033[1m%s\033[0m"|format(rendered_value) %}
+{% endif %}
+{% set params.rows = params.rows + [[key, rendered_value]] %}
+{% endfor %}
+{{ txt_table(["Parameter", "Value"], params.rows) }}
+
+{% if tuning.summary %}
+Tuning Summary
+{{ txt_table(
+    ["Property", "Value"],
+    [
+        ["Method", tuning.summary.method],
+        ["Metric", tuning.summary.metric],
+        ["CV Folds", tuning.summary.cv_folds if tuning.summary.cv_folds is not none else "None"],
+        ["Candidates", tuning.summary.n_candidates],
+        ["Best Score", "%.4f"|format(tuning.summary.best_score) if tuning.summary.best_score is not none else "None"],
+    ]
+) }}
+
+{% endif %}
+{% if data.cv_folds is not none %}
+Metrics (Cross-Validation)
+{% set metric_rows = namespace(values=[]) %}
+{% for metric_id, metric_data in metrics.items() %}
+{% set summary = metric_data["values"]["cv"] %}
+{% set metric_rows.values = metric_rows.values + [[
+    metric_data.name,
+    "%.4f"|format(summary["mean"]),
+    "%.4f"|format(summary["std"]),
+    "%.4f"|format(summary["min"]),
+    "%.4f"|format(summary["max"]),
+]] %}
+{% endfor %}
+{{ txt_table(["Metric", "Mean", "Std Dev", "Min", "Max"], metric_rows.values) }}
+{% else %}
+Metrics (Train/Test Split)
+{% set split_names = metrics[metrics.keys()|list|first]["values"].keys()|reject("equalto", "per_class")|list %}
+{% set metric_headers = namespace(values=["Metric"]) %}
+{% for split_name in split_names %}
+{% set metric_headers.values = metric_headers.values + [split_name | capitalize] %}
+{% endfor %}
+{% if "train" in split_names and "test" in split_names %}
+{% set metric_headers.values = metric_headers.values + ["Gap"] %}
+{% endif %}
+{% set metric_rows = namespace(values=[]) %}
+{% for metric_id, metric_data in metrics.items() %}
+{% set row = namespace(values=[metric_data.name]) %}
+{% for split_name in split_names %}
+{% set row.values = row.values + ["%.4f"|format(metric_data["values"][split_name])] %}
+{% endfor %}
+{% if "train" in split_names and "test" in split_names %}
+{% set row.values = row.values + ["%+.4f"|format(metric_data["values"]["train"] - metric_data["values"]["test"])] %}
+{% endif %}
+{% set metric_rows.values = metric_rows.values + [row.values] %}
+{% endfor %}
+{{ txt_table(metric_headers.values, metric_rows.values, colalign=["left", "right", "right", "right", "right"]) }}
+{% if "train" in split_names and "test" in split_names %}
+Gap = Train - Test. Large positive values may indicate overfitting.
+{% endif %}
+{% endif %}
+
+{% if "precision_macro" in metrics and "per_class" in metrics["precision_macro"]["values"] %}
+{% if data.cv_folds is not none %}
+Per-Class Metrics
+{% set p = metrics["precision_macro"]["values"]["per_class"]["cv"] %}
+{% set r = metrics["recall_macro"]["values"]["per_class"]["cv"] %}
+{% set f = metrics["f1_macro"]["values"]["per_class"]["cv"] %}
+{% set class_metric_rows = namespace(values=[]) %}
+{% for class_label in p.keys() %}
+{% set class_metric_rows.values = class_metric_rows.values + [[
+    class_label,
+    "%.4f"|format(p[class_label]),
+    "%.4f"|format(r[class_label]),
+    "%.4f"|format(f[class_label]),
+]] %}
+{% endfor %}
+{{ txt_table(["Class", "Precision", "Recall", "F1"], class_metric_rows.values) }}
+{% else %}
+{% for split_name in split_names %}
+
+Per-Class Metrics - {{ split_name | capitalize }}
+{% set p = metrics["precision_macro"]["values"]["per_class"][split_name] %}
+{% set r = metrics["recall_macro"]["values"]["per_class"][split_name] %}
+{% set f = metrics["f1_macro"]["values"]["per_class"][split_name] %}
+{% set class_metric_rows = namespace(values=[]) %}
+{% for class_label in p.keys() %}
+{% set class_metric_rows.values = class_metric_rows.values + [[
+    class_label,
+    "%.4f"|format(p[class_label]),
+    "%.4f"|format(r[class_label]),
+    "%.4f"|format(f[class_label]),
+]] %}
+{% endfor %}
+{{ txt_table(["Class", "Precision", "Recall", "F1"], class_metric_rows.values, colalign=["left", "right", "right", "right"]) }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+
+[Generated at {{ meta.generated_at }} by mlreport]

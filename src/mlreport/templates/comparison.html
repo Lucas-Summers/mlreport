@@ -31,19 +31,19 @@
                     <div class="models-grid">
                         {% for model in models %}
                         <article class="model-card{% if model.is_baseline %} baseline{% endif %}">
-                            <h3>
+                            <h3 class="model-card-index">
                                 Model {{ model.index + 1 }}{% if model.is_baseline %} [baseline]{% endif %}
                             </h3>
                             <hr class="model-card-rule" />
-                            <div class="model-card-name">{{ model.name }}</div>
+                            <div class="model-card-name">{{ model.title_name }}</div>
                             <dl>
                                 {% if model.description %}
                                 <dt>Description</dt><dd>{{ model.description }}</dd>
                                 {% endif %}
                                 <dt>Type</dt><dd>{{ model.type }}</dd>
                                 <dt>Data</dt><dd>{{ model.data_label }}</dd>
-                                <dt>Tuned</dt><dd>{{ model.tuned_label }}</dd>
                                 <dt>Params</dt><dd>{{ model.param_count }}</dd>
+                                <dt>Tuned</dt><dd>{{ model.tuned_label }}</dd>
                             </dl>
                         </article>
                         {% endfor %}

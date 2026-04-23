@@ -23,6 +23,7 @@ from .render import (
     render_json,
     render_md,
     render_pdf,
+    render_txt,
 )
 from .theme import get_plot_colors
 
@@ -245,120 +246,26 @@ class Report:
         self._state.built = True
         return self
 
-    def summary(self) -> Report:
+    def to_txt(self, path: str | None = None) -> Report:
         """
-        Print a text summary of the report.
+        Render report to TXT.
+
+        Args:
+            path: Optional output file path for the TXT report.
 
         Returns:
             Self for method chaining.
         """
         self._require_built()
 
-        report_data = self._to_dict()
-        meta = report_data.get("meta", {})
-        model_data = report_data.get("model", {})
-        data = report_data.get("data", {})
-        metrics = report_data.get("metrics", {})
-        tuning_summary = report_data.get("tuning", {}).get("summary")
+        context = self._to_dict()
+        context.pop("plots", None)
+        if isinstance(context.get("tuning"), dict):
+            context["tuning"].pop("plots", None)
 
-        print("Report")
-        if meta.get("title"):
-            print(f"  title: {meta['title']}")
-        if meta.get("author"):
-            print(f"  author: {meta['author']}")
-        if meta.get("description"):
-            print(f"  description: {meta['description']}")
-        if meta.get("generated_at"):
-            print(f"  generated_at: {meta['generated_at']}")
-        print()
-
-        model_params = model_data.get("params", {})
-        param_count = len(model_params) if isinstance(model_params, dict) else 0
-
-        print("Model")
-        if model_data.get("name"):
-            print(f"  name: {model_data['name']}")
-        if model_data.get("type"):
-            print(f"  type: {model_data['type']}")
-        if model_data.get("version"):
-            print(f"  sklearn_version: {model_data['version']}")
-        print(f"  param_count: {param_count}")
-
-        if tuning_summary:
-            print(f"  tuning_method: {tuning_summary.get('method')}")
-            print(f"  tuning_metric: {tuning_summary.get('metric')}")
-
-            best_score = tuning_summary.get("best_score")
-            if isinstance(best_score, Number):
-                print(f"  tuning_best_score: {best_score:.4f}")
-            elif best_score is not None:
-                print(f"  tuning_best_score: {best_score}")
-
-            n_candidates = tuning_summary.get("n_candidates")
-            if n_candidates is not None:
-                print(f"  tuning_candidates: {n_candidates}")
-
-            cv_folds = tuning_summary.get("cv_folds")
-            if cv_folds is not None:
-                print(f"  tuning_cv_folds: {cv_folds}")
-
-            best_params = tuning_summary.get("best_params") or {}
-            if isinstance(best_params, dict) and best_params:
-                best_params_str = ", ".join(
-                    f"{key}={value}" for key, value in sorted(best_params.items())
-                )
-                print(f"  tuning_best_params: {best_params_str}")
-        print()
-
-        splits = data.get("splits", {})
-        splits_str = (
-            ", ".join(f"{name}={count}" for name, count in splits.items())
-            if isinstance(splits, dict)
-            else ""
-        )
-
-        print("Data")
-        if data.get("features") is not None:
-            print(f"  features: {data['features']}")
-        if splits_str:
-            print(f"  splits: {splits_str}")
-        if data.get("total") is not None:
-            print(f"  total: {data['total']}")
-        cv_folds = data.get("cv_folds")
-        if cv_folds is not None:
-            print(f"  cv_folds: {cv_folds}")
-        print()
-
-        print("Metrics")
-        for metric_data in metrics.values():
-            metric_name = metric_data.get("name", "metric")
-            values = metric_data.get("values", {})
-
-            parts = []
-            if isinstance(values, dict):
-                for split_name, value in values.items():
-                    if split_name == "per_class":
-                        continue
-                    if isinstance(value, dict) and "mean" in value:
-                        mean = value.get("mean")
-                        std = value.get("std")
-                        if isinstance(mean, Number):
-                            if isinstance(std, Number):
-                                parts.append(f"{split_name}={mean:.4f} (std={std:.4f})")
-                            else:
-                                parts.append(f"{split_name}={mean:.4f}")
-                        else:
-                            parts.append(f"{split_name}={mean}")
-                    elif isinstance(value, Number):
-                        parts.append(f"{split_name}={value:.4f}")
-                    else:
-                        parts.append(f"{split_name}={value}")
-
-            if parts:
-                print(f"  {metric_name}: {', '.join(parts)}")
-            else:
-                print(f"  {metric_name}")
-
+        content = render_txt("report", self.theme, context, path=path)
+        if path is None:
+            print(content)
         return self
 
     def to_html(self, path: str) -> Report:
@@ -833,16 +740,24 @@ class Report:
         for spine in ax.spines.values():
             spine.set_edgecolor(plot_fg)
 
-        im = ax.imshow(matrix, aspect="auto", cmap=cmap)
+        masked_matrix = np.ma.masked_invalid(matrix)
+        x_edges = np.arange(len(x_keys) + 1, dtype=float)
+        y_edges = np.arange(len(y_keys) + 1, dtype=float)
+        im = ax.pcolormesh(
+            x_edges,
+            y_edges,
+            masked_matrix,
+            cmap=cmap,
+            shading="flat",
+            edgecolors=plot_fg,
+            linewidth=1.0,
+            antialiased=False,
+        )
+        ax.set_aspect("auto")
+        ax.invert_yaxis()
         cbar = fig.colorbar(im, ax=ax)
         cbar.set_label(f"Mean CV {metric_name}", color=plot_fg)
         cbar.ax.tick_params(colors=plot_fg)
-
-        ax.set_axisbelow(False)
-        ax.set_xticks(np.arange(len(x_keys) + 1) - 0.5, minor=True)
-        ax.set_yticks(np.arange(len(y_keys) + 1) - 0.5, minor=True)
-        ax.grid(which="minor", color=plot_fg, linestyle="-", linewidth=1.0)
-        ax.tick_params(which="minor", bottom=False, left=False)
 
         finite_values = matrix[np.isfinite(matrix)]
         if finite_values.size:
@@ -859,19 +774,19 @@ class Report:
 
                 text_color = cmap_max if value < thresh else cmap_min
                 ax.text(
-                    col,
-                    row,
+                    col + 0.5,
+                    row + 0.5,
                     f"{value:.3f}",
                     ha="center",
                     va="center",
                     color=text_color,
                 )
 
-        ax.set_xticks(np.arange(len(x_keys)))
+        ax.set_xticks(np.arange(len(x_keys), dtype=float) + 0.5)
         ax.set_xticklabels(
             [str(x_lookup[key]) for key in x_keys], rotation=30, ha="right"
         )
-        ax.set_yticks(np.arange(len(y_keys)))
+        ax.set_yticks(np.arange(len(y_keys), dtype=float) + 0.5)
         ax.set_yticklabels([str(y_lookup[key]) for key in y_keys])
         ax.set_xlabel(param_a)
         ax.set_ylabel(param_b)

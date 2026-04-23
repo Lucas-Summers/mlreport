@@ -39,6 +39,7 @@ dependencies = [
     "matplotlib",
     "scikit-learn",
     "jinja2",
+    "tabulate",
     "weasyprint",
     "jupyterlab",
 ]
@@ -54,4 +55,4 @@ where = ["src"]
 include = ["mlreport*"]
 
 [tool.setuptools.package-data]
-mlreport = ["templates/*.html", "templates/*.md", "templates/themes/*.css", "templates/styles/*.css"]
+mlreport = ["templates/*.html", "templates/*.md", "templates/*.txt", "templates/themes/*.css", "templates/styles/*.css"]

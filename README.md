@@ -8,6 +8,7 @@ It supports exports to:
 - PDF
 - JSON
 - Markdown
+- TXT
 
 It also supports comparison reports built from multiple model reports.
 
@@ -91,7 +92,7 @@ report.available_plots()
 ### 5) Export outputs
 
 ```python
-report.summary()
+report.to_txt()
 report.to_html("file.html")
 report.to_md("file.md")
 report.to_json("file.json")
@@ -127,7 +128,7 @@ comparison = ComparisonReport(
     theme="light",
 ).build()
 
-comparison.summary()
+comparison.to_txt()
 comparison.to_html("comparison.html")
 comparison.to_md("comparison.md")
 comparison.to_json("comparison.json")

@@ -109,14 +109,9 @@ class RegressionHandler(ModelHandler):
 
         for name, (X, y, y_pred) in splits.items():
             residuals = y - y_pred
-            theoretical_q, sample_q = stats.probplot(
-                residuals,
-                dist="norm",
-                fit=False,
-            )
+            probplot_result = stats.probplot(residuals, dist="norm")
+            (theoretical_q, sample_q), fit = probplot_result
             color = ax._get_lines.get_next_color()
-            line_x = np.asarray(theoretical_q, dtype=float)
-            line_y = np.sort(np.asarray(residuals, dtype=float))
             ax.scatter(
                 theoretical_q,
                 sample_q,
@@ -125,9 +120,14 @@ class RegressionHandler(ModelHandler):
                 color=color,
                 label=name.capitalize(),
             )
-            ax.plot(
-                line_x,
-                line_y,
+            reference_x = np.asarray(theoretical_q, dtype=float)
+            slope, intercept = fit[0], fit[1]
+            ax.axline(
+                (
+                    reference_x[0],
+                    slope * reference_x[0] + intercept,
+                ),
+                slope=slope,
                 linestyle="--",
                 alpha=0.8,
                 color=color,

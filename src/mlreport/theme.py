@@ -12,7 +12,13 @@ THEME_DIR = TEMPLATE_DIR / "themes"
 STYLE_DIR = TEMPLATE_DIR / "styles"
 
 
-def get_template(name: str):
+def get_template(
+    name: str,
+    *,
+    trim_blocks: bool = False,
+    lstrip_blocks: bool = False,
+    **globals_,
+):
     """
     Load a Jinja2 template by name from the packaged templates directory.
 
@@ -22,7 +28,12 @@ def get_template(name: str):
     Returns:
         Loaded Jinja2 template object.
     """
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        trim_blocks=trim_blocks,
+        lstrip_blocks=lstrip_blocks,
+    )
+    env.globals.update(globals_)
     return env.get_template(name)
 
 

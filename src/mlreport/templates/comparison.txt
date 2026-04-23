@@ -1,0 +1,59 @@
+{% set report_title = meta.title if meta.title else "Comparison Report" %}
+{% set report_byline = meta.author if meta.author else "Generated %s"|format(meta.generated_at) %}
+{% set header_rule_width = [report_title | length, report_byline | length, (meta.description if meta.description else "") | length] | max %}
+{{ report_title }}
+{{ report_byline }}
+{% if meta.description %}
+{{ meta.description }}
+{% endif %}
+{{ "=" * header_rule_width }}
+
+Models
+{% for model in models %}
+
+Model {{ model.index + 1 }}
+{{ txt_table(
+    ["Property", "Value"],
+    [
+        ["Name", model.title_name],
+        ["Description", model.description if model.description else "None"],
+        ["Type", model.type],
+        ["Data", model.data_label],
+        ["Params", model.param_count],
+        ["Tuned", model.tuned_label],
+        ["Baseline", "Yes" if model.is_baseline else "No"],
+    ]
+) }}
+{% endfor %}
+
+Metrics
+{% set metric_headers = namespace(values=["Metric"]) %}
+{% for model in models %}
+{% set metric_headers.values = metric_headers.values + ["Model %d"|format(model.index + 1)] %}
+{% endfor %}
+{% set metric_headers.values = metric_headers.values + ["Best"] %}
+{% set metric_rows = namespace(values=[]) %}
+{% for metric in metrics %}
+{% set row = namespace(values=[metric.metric_name]) %}
+{% for model in models %}
+{% set value = metric["values"][model.key] %}
+{% if model.is_baseline %}
+{% set row.values = row.values + ["%.4f"|format(value)] %}
+{% else %}
+{% set row.values = row.values + ["%.4f (%+.4f)"|format(value, metric["deltas"][model.key])] %}
+{% endif %}
+{% endfor %}
+{% set row.values = row.values + ["Model %d"|format(metric.best_index)] %}
+{% set metric_rows.values = metric_rows.values + [row.values] %}
+{% endfor %}
+{{ txt_table(
+    metric_headers.values,
+    metric_rows.values,
+    colalign=["left"] + (["right"] * (models | length)) + ["left"]
+) }}
+
+{% if comparison.mixed_splits %}
+Metrics may be drawn from different evaluation splits across models.
+{% endif %}
+
+[Generated at {{ meta.generated_at }} by mlreport]

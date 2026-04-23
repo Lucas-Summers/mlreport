@@ -34,7 +34,48 @@
                         <tr><th>Name</th><td>{{ model.name }}</td></tr>
                         <tr><th>Type</th><td>{{ model.type | capitalize }}</td></tr>
                         <tr><th>Sklearn</th><td>{{ model.version }}</td></tr>
+                        <tr><th>Parameter Count</th><td>{{ model.params | length }}</td></tr>
                     </table>
+                </section>
+
+                <section>
+                    <h2>Dataset Overview</h2>
+                    <table>
+                        <tr><th>Features</th><td>{{ data.features }}</td></tr>
+                        <tr><th>Total Observations</th><td>{{ data.total }}</td></tr>
+                        <tr><th>CV Folds</th><td>{% if data.cv_folds is not none %}{{ data.cv_folds }}{% else %}None{% endif %}</td></tr>
+                        {% for split_name, count in data.splits.items() %}
+                        {% if split_name != "cv" %}
+                        <tr>
+                            <th>{{ split_name | capitalize }}</th>
+                            <td>{{ count }} ({{ "%.1f"|format(count / data.total * 100) }}%)</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </table>
+
+                    {% if data.class_distribution %}
+                    {% set first_split = data.splits.keys() | list | first %}
+                    <h3>Class Distribution</h3>
+                    <table>
+                        <tr>
+                            <th>Class</th>
+                            {% for split_name in data.splits.keys() %}
+                            <th class="numeric">{{ split_name | capitalize }}</th>
+                            {% endfor %}
+                            <th class="numeric">Overall %</th>
+                        </tr>
+                        {% for class_label in data.class_distribution[first_split].keys() %}
+                        <tr>
+                            <td>{{ class_label }}</td>
+                            {% for split_name in data.splits.keys() %}
+                            <td class="numeric">{{ data.class_distribution[split_name][class_label] }}</td>
+                            {% endfor %}
+                            <td class="numeric">{{ "%.1f"|format(data.class_percentages[class_label]) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% endif %}
                 </section>
 
                 <section>
@@ -81,46 +122,6 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-                    {% endif %}
-                </section>
-
-                <section>
-                    <h2>Dataset Overview</h2>
-                    <table>
-                        <tr><th>Features</th><td>{{ data.features }}</td></tr>
-                        <tr><th>Total Observations</th><td>{{ data.total }}</td></tr>
-                        <tr><th>CV Folds</th><td>{% if data.cv_folds is not none %}{{ data.cv_folds }}{% else %}None{% endif %}</td></tr>
-                        {% for split_name, count in data.splits.items() %}
-                        {% if split_name != "cv" %}
-                        <tr>
-                            <th>{{ split_name | capitalize }}</th>
-                            <td>{{ count }} ({{ "%.1f"|format(count / data.total * 100) }}%)</td>
-                        </tr>
-                        {% endif %}
-                        {% endfor %}
-                    </table>
-
-                    {% if data.class_distribution %}
-                    {% set first_split = data.splits.keys() | list | first %}
-                    <h3>Class Distribution</h3>
-                    <table>
-                        <tr>
-                            <th>Class</th>
-                            {% for split_name in data.splits.keys() %}
-                            <th class="numeric">{{ split_name | capitalize }}</th>
-                            {% endfor %}
-                            <th class="numeric">Overall %</th>
-                        </tr>
-                        {% for class_label in data.class_distribution[first_split].keys() %}
-                        <tr>
-                            <td>{{ class_label }}</td>
-                            {% for split_name in data.splits.keys() %}
-                            <td class="numeric">{{ data.class_distribution[split_name][class_label] }}</td>
-                            {% endfor %}
-                            <td class="numeric">{{ "%.1f"|format(data.class_percentages[class_label]) }}%</td>
-                        </tr>
-                        {% endfor %}
-                    </table>
                     {% endif %}
                 </section>
 

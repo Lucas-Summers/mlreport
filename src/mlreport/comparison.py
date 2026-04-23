@@ -5,7 +5,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .render import fig_to_base64, fig_to_file, render_html, render_json, render_md, render_pdf
+from .render import (
+    fig_to_base64,
+    fig_to_file,
+    render_html,
+    render_json,
+    render_md,
+    render_pdf,
+    render_txt,
+)
 from .report import Report
 
 
@@ -72,39 +80,13 @@ class ComparisonReport:
         self._state.built = True
         return self
 
-    def summary(self) -> ComparisonReport:
+    def to_txt(self, path: str | None = None) -> ComparisonReport:
         self._require_built()
 
-        print("Comparison Report")
-        if self.title:
-            print(f"  title: {self.title}")
-        if self.author:
-            print(f"  author: {self.author}")
-        if self.description:
-            print(f"  description: {self.description}")
-        print(f"  baseline: {self._state.models[0]['key']}")
-        print()
-
-        print("Models")
-        for i, model in enumerate(self._state.models, 1):
-            suffix = " [baseline]" if model["is_baseline"] else ""
-            detail = f": {model['description']}" if model["description"] else ""
-            print(f"  {i}. {model['key']} ({model['name']}){suffix}{detail}")
-        print()
-
-        print("Metrics")
-        for metric in self._state.metrics:
-            parts = []
-            baseline_key = metric["keys"][0]
-            for key in metric["keys"]:
-                value = metric["values"][key]
-                if key == baseline_key:
-                    parts.append(f"{key}={value:.4f}")
-                else:
-                    parts.append(f"{key}={value:.4f} ({metric['deltas'][key]:+.4f})")
-            parts.append(f"best={metric['best_key']}")
-            print(f"  {metric['metric_name']}: {', '.join(parts)}")
-
+        context = self.to_dict()
+        content = render_txt("comparison", self.theme, context, path=path)
+        if path is None:
+            print(content)
         return self
 
     def to_html(self, path: str) -> ComparisonReport:
@@ -218,6 +200,8 @@ class ComparisonReport:
             cv_folds = payload.get("data", {}).get("cv_folds")
             if split == "cv" and cv_folds is not None:
                 data_label = f"{cv_folds}-fold CV"
+            elif split == "test":
+                data_label = "Train/Test Split"
             else:
                 data_label = split.capitalize()
 
@@ -232,6 +216,7 @@ class ComparisonReport:
                 {
                     "index": i,
                     "key": model_key,
+                    "title_name": model_key,
                     "description": description,
                     "name": payload["model"]["name"],
                     "type": payload["model"]["type"],
@@ -323,7 +308,9 @@ class ComparisonReport:
                 if plot_data is None:
                     continue
                 if fig_axes := plot_data["fig"].axes:
-                    fig_axes[0].set_title(model["key"])
+                    fig_axes[0].set_title(
+                        f'{model["title_name"]} [Model {model["index"] + 1}]'
+                    )
                 cards.append(
                     {
                         "model_key": model["key"],
