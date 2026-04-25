@@ -14,7 +14,7 @@ Model Overview
     [
         ["Name", model.name],
         ["Type", model.type],
-        ["Sklearn", model.version],
+        ["Sklearn", model.sklearn],
         ["Parameter Count", model.params | length],
     ]
 ) }}
@@ -37,7 +37,8 @@ Class Distribution
 {% set first_split = data.splits.keys() | list | first %}
 {% set class_headers = namespace(values=["Class"]) %}
 {% for split_name in data.splits.keys() %}
-{% set class_headers.values = class_headers.values + [split_name | capitalize] %}
+{% set split_label = "CV" if split_name == "cv" else split_name | capitalize %}
+{% set class_headers.values = class_headers.values + [split_label] %}
 {% endfor %}
 {% set class_headers.values = class_headers.values + ["Overall %"] %}
 {% set class_rows = namespace(values=[]) %}
@@ -94,11 +95,16 @@ Metrics (Cross-Validation)
 {% endfor %}
 {{ txt_table(["Metric", "Mean", "Std Dev", "Min", "Max"], metric_rows.values) }}
 {% else %}
-Metrics (Train/Test Split)
 {% set split_names = metrics[metrics.keys()|list|first]["values"].keys()|reject("equalto", "per_class")|list %}
+{% if data.is_crossval %}
+Metrics (Cross-Validation Predictions)
+{% else %}
+Metrics (Train/Test Split)
+{% endif %}
 {% set metric_headers = namespace(values=["Metric"]) %}
 {% for split_name in split_names %}
-{% set metric_headers.values = metric_headers.values + [split_name | capitalize] %}
+{% set split_label = "CV" if split_name == "cv" else split_name | capitalize %}
+{% set metric_headers.values = metric_headers.values + [split_label] %}
 {% endfor %}
 {% if "train" in split_names and "test" in split_names %}
 {% set metric_headers.values = metric_headers.values + ["Gap"] %}
@@ -121,7 +127,7 @@ Gap = Train - Test. Large positive values may indicate overfitting.
 {% endif %}
 
 {% if "precision_macro" in metrics and "per_class" in metrics["precision_macro"]["values"] %}
-{% if data.cv_folds is not none %}
+{% if data.is_crossval %}
 Per-Class Metrics
 {% set p = metrics["precision_macro"]["values"]["per_class"]["cv"] %}
 {% set r = metrics["recall_macro"]["values"]["per_class"]["cv"] %}
@@ -139,7 +145,7 @@ Per-Class Metrics
 {% else %}
 {% for split_name in split_names %}
 
-Per-Class Metrics - {{ split_name | capitalize }}
+Per-Class Metrics - {% if split_name == "cv" %}CV{% else %}{{ split_name | capitalize }}{% endif %}
 {% set p = metrics["precision_macro"]["values"]["per_class"][split_name] %}
 {% set r = metrics["recall_macro"]["values"]["per_class"][split_name] %}
 {% set f = metrics["f1_macro"]["values"]["per_class"][split_name] %}

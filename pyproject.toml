@@ -41,6 +41,7 @@ dependencies = [
     "jinja2",
     "tabulate",
     "weasyprint",
+    "pandas",
     "jupyterlab",
 ]
 

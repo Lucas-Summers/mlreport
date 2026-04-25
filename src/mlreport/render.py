@@ -14,12 +14,30 @@ from .theme import get_style_css, get_template, get_theme_css
 
 
 def _ensure_parent_dir(path: str) -> Path:
+    """
+    Ensure the parent directory for an output path exists.
+
+    Args:
+        path: Output file path.
+
+    Returns:
+        Path object for the requested output file.
+    """
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     return target
 
 
 def fig_to_base64(fig) -> str:
+    """
+    Serialize a matplotlib figure as a base64-encoded PNG.
+
+    Args:
+        fig: Matplotlib figure to serialize.
+
+    Returns:
+        Base64 PNG image string.
+    """
     buf = BytesIO()
     fig.savefig(
         buf,
@@ -35,6 +53,16 @@ def fig_to_base64(fig) -> str:
 
 
 def fig_to_file(fig, path: str) -> str:
+    """
+    Save a matplotlib figure to disk.
+
+    Args:
+        fig: Matplotlib figure to save.
+        path: Output image path.
+
+    Returns:
+        Output image path as a string.
+    """
     target = _ensure_parent_dir(path)
     fig.savefig(
         target,
@@ -47,6 +75,18 @@ def fig_to_file(fig, path: str) -> str:
 
 
 def render_html(report_type: str, theme: str, context: dict, path: str | None = None):
+    """
+    Render an HTML report from a Jinja template.
+
+    Args:
+        report_type: Template family name, such as ``report`` or ``comparison``.
+        theme: Theme stylesheet name.
+        context: Template context payload.
+        path: Optional output file path.
+
+    Returns:
+        Rendered HTML content, or ``True`` when written to ``path``.
+    """
     html_context = dict(context)
     html_context["base_css"] = get_style_css("base.css")
     html_context["page_css"] = get_style_css(f"{report_type}.css")
@@ -62,6 +102,18 @@ def render_html(report_type: str, theme: str, context: dict, path: str | None = 
 
 
 def render_md(report_type: str, theme: str, context: dict, path: str | None = None):
+    """
+    Render a Markdown report from a Jinja template.
+
+    Args:
+        report_type: Template family name, such as ``report`` or ``comparison``.
+        theme: Unused theme argument kept for renderer API consistency.
+        context: Template context payload.
+        path: Optional output file path.
+
+    Returns:
+        Rendered Markdown content, or ``True`` when written to ``path``.
+    """
     del theme
     template = get_template(f"{report_type}.md", trim_blocks=True, lstrip_blocks=True)
     content = template.render(**context)
@@ -73,6 +125,18 @@ def render_md(report_type: str, theme: str, context: dict, path: str | None = No
 
 
 def render_txt(report_type: str, theme: str, context: dict, path: str | None = None):
+    """
+    Render a plain-text report from a Jinja template.
+
+    Args:
+        report_type: Template family name, such as ``report`` or ``comparison``.
+        theme: Unused theme argument kept for renderer API consistency.
+        context: Template context payload.
+        path: Optional output file path.
+
+    Returns:
+        Rendered text content, or ``True`` when written to ``path``.
+    """
     del theme
     template = get_template(
         f"{report_type}.txt",
@@ -91,6 +155,18 @@ def render_txt(report_type: str, theme: str, context: dict, path: str | None = N
 
 
 def render_json(report_type: str, theme: str, context: dict, path: str | None = None):
+    """
+    Render a report payload as JSON-compatible data.
+
+    Args:
+        report_type: Unused report type argument kept for renderer API consistency.
+        theme: Unused theme argument kept for renderer API consistency.
+        context: Report payload.
+        path: Optional output file path.
+
+    Returns:
+        Original context payload, or ``True`` when written to ``path``.
+    """
     del report_type, theme
     if path is not None:
         _ensure_parent_dir(path).write_text(json.dumps(context, indent=4))
@@ -99,6 +175,18 @@ def render_json(report_type: str, theme: str, context: dict, path: str | None = 
 
 
 def render_pdf(report_type: str, theme: str, context: dict, path: str | None = None):
+    """
+    Render a PDF report by first rendering HTML and passing it to WeasyPrint.
+
+    Args:
+        report_type: Template family name, such as ``report`` or ``comparison``.
+        theme: Theme stylesheet name.
+        context: Template context payload.
+        path: Optional output file path.
+
+    Returns:
+        PDF bytes, or ``True`` when written to ``path``.
+    """
     from weasyprint import HTML
 
     html = render_html(report_type, theme, context, path=None)

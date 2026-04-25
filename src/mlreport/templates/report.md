@@ -15,7 +15,7 @@
 |-----------|-------|
 | Name | {{ model.name }} |
 | Type | {{ model.type }} |
-| Sklearn | {{ model.version }} |
+| Sklearn | {{ model.sklearn }} |
 | Parameter Count | {{ model.params | length }} |
 
 
@@ -36,7 +36,7 @@
 ## Class Distribution
 
 {% set first_split = data.splits.keys() | list | first %}
-| Class | {% for split_name in data.splits.keys() %}{{ split_name | capitalize }} | {% endfor %}Overall % |
+| Class | {% for split_name in data.splits.keys() %}{% if split_name == 'cv' %}CV{% else %}{{ split_name | capitalize }}{% endif %} | {% endfor %}Overall % |
 |------|{% for split_name in data.splits.keys() %}-------|{% endfor %}-----------|
 {% for class_label in data.class_distribution[first_split].keys() -%}
 | {{ class_label }} | {% for split_name in data.splits.keys() %}{{ data.class_distribution[split_name][class_label] }} | {% endfor %}{{ "%.1f"|format(data.class_percentages[class_label]) }}% |
@@ -91,10 +91,14 @@
 | {{ metric_data.name }} | {{ "%.4f"|format(summary["mean"]) }} | {{ "%.4f"|format(summary["std"]) }} | {{ "%.4f"|format(summary["min"]) }} | {{ "%.4f"|format(summary["max"]) }} |
 {% endfor %}
 {% else %}
-## Metrics (Train/Test Split)
 {% set split_names = metrics[metrics.keys()|list|first]["values"].keys()|reject("equalto", "per_class")|list %}
+{% if data.is_crossval %}
+## Metrics (Cross-Validation Predictions)
+{% else %}
+## Metrics (Train/Test Split)
+{% endif %}
 
-| Metric |{% for split_name in split_names %} {{ split_name | capitalize }} |{% endfor %}{% if 'train' in split_names and 'test' in split_names %} Gap |{% endif %}
+| Metric |{% for split_name in split_names %} {% if split_name == 'cv' %}CV{% else %}{{ split_name | capitalize }}{% endif %} |{% endfor %}{% if 'train' in split_names and 'test' in split_names %} Gap |{% endif %}
 |--------|{% for split_name in split_names %}-------|{% endfor %}{% if 'train' in split_names and 'test' in split_names %}-------|{% endif %}
 {% for metric_id, metric_data in metrics.items() -%}
 | {{ metric_data.name }} |{% for split_name in split_names %} {{ "%.4f"|format(metric_data["values"][split_name]) }} |{% endfor %}{% if 'train' in split_names and 'test' in split_names %} {{ "%+.4f"|format(metric_data["values"]["train"] - metric_data["values"]["test"]) }} |{% endif %}
@@ -108,7 +112,7 @@
 {% if "precision_macro" in metrics and "per_class" in metrics["precision_macro"]["values"] %}
 ## Metrics (Per-Class)
 
-{% if data.cv_folds is not none %}
+{% if data.is_crossval %}
 {% set p = metrics["precision_macro"]["values"]["per_class"]["cv"] %}
 {% set r = metrics["recall_macro"]["values"]["per_class"]["cv"] %}
 {% set f = metrics["f1_macro"]["values"]["per_class"]["cv"] %}
@@ -119,7 +123,7 @@
 {% endfor %}
 {% else %}
 {% for split_name in split_names %}
-### {{ split_name | capitalize }}
+### {% if split_name == 'cv' %}CV{% else %}{{ split_name | capitalize }}{% endif %}
 
 {% set p = metrics["precision_macro"]["values"]["per_class"][split_name] %}
 {% set r = metrics["recall_macro"]["values"]["per_class"][split_name] %}

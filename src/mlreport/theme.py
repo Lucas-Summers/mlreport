@@ -24,6 +24,9 @@ def get_template(
 
     Args:
         name: Template filename.
+        trim_blocks: Whether Jinja should strip the first newline after blocks.
+        lstrip_blocks: Whether Jinja should strip leading spaces before blocks.
+        **globals_: Extra globals made available to the template.
 
     Returns:
         Loaded Jinja2 template object.

@@ -39,6 +39,18 @@ class ComparisonReport:
         theme: str = "light",
         cmap: str = "viridis",
     ):
+        """
+        Initialize a comparison report from already-built model reports.
+
+        Args:
+            reports: Reports to compare.
+            title: Optional comparison title.
+            author: Optional report author.
+            description: Optional comparison description.
+            split: Optional split name to compare across all reports.
+            theme: Render theme name.
+            cmap: Matplotlib colormap name for comparison plots.
+        """
         self.reports = reports
         self.title = title
         self.author = author
@@ -50,6 +62,12 @@ class ComparisonReport:
         self._state = ComparisonState()
 
     def build(self) -> ComparisonReport:
+        """
+        Validate reports and build comparison tables and plots.
+
+        Returns:
+            Self for method chaining.
+        """
         if len(self.reports) < 2:
             raise ValueError("ComparisonReport requires at least 2 reports.")
 
@@ -64,7 +82,9 @@ class ComparisonReport:
         splits = [self._resolve_split(payload) for payload in payloads]
         metric_ids = self._get_common_scalar_metric_ids(payloads, splits)
         if not metric_ids:
-            raise ValueError("No compatible scalar metrics found across compared reports.")
+            raise ValueError(
+                "No compatible scalar metrics found across compared reports."
+            )
         descriptions = [self._get_report_description(payload) for payload in payloads]
 
         self._state.split = splits[0] if len(set(splits)) == 1 else None
@@ -81,6 +101,15 @@ class ComparisonReport:
         return self
 
     def to_txt(self, path: str | None = None) -> ComparisonReport:
+        """
+        Render the comparison report to TXT.
+
+        Args:
+            path: Optional output file path.
+
+        Returns:
+            Self for method chaining.
+        """
         self._require_built()
 
         context = self.to_dict()
@@ -90,6 +119,15 @@ class ComparisonReport:
         return self
 
     def to_html(self, path: str) -> ComparisonReport:
+        """
+        Render the comparison report to HTML.
+
+        Args:
+            path: Output file path.
+
+        Returns:
+            Self for method chaining.
+        """
         self._require_built()
 
         context = self.to_dict()
@@ -99,6 +137,15 @@ class ComparisonReport:
         return self
 
     def to_pdf(self, path: str) -> ComparisonReport:
+        """
+        Render the comparison report to PDF.
+
+        Args:
+            path: Output file path.
+
+        Returns:
+            Self for method chaining.
+        """
         self._require_built()
 
         context = self.to_dict()
@@ -107,6 +154,15 @@ class ComparisonReport:
         return self
 
     def to_json(self, path: str) -> ComparisonReport:
+        """
+        Render the comparison report to JSON.
+
+        Args:
+            path: Output file path.
+
+        Returns:
+            Self for method chaining.
+        """
         self._require_built()
 
         render_json("comparison", self.theme, self.to_dict(), path=path)
@@ -114,6 +170,16 @@ class ComparisonReport:
         return self
 
     def to_md(self, path: str, image_dir: str | None = None) -> ComparisonReport:
+        """
+        Render the comparison report to Markdown.
+
+        Args:
+            path: Output file path.
+            image_dir: Optional directory for exported plot images.
+
+        Returns:
+            Self for method chaining.
+        """
         self._require_built()
 
         if image_dir is None:
@@ -128,6 +194,12 @@ class ComparisonReport:
         return self
 
     def to_dict(self) -> dict:
+        """
+        Convert the built comparison into a renderer-friendly dictionary.
+
+        Returns:
+            Report payload with metadata, model rows, and metric rows.
+        """
         self._require_built()
 
         return {
@@ -147,10 +219,22 @@ class ComparisonReport:
         }
 
     def _require_built(self) -> None:
+        """
+        Validate that ``build()`` has been called.
+        """
         if not self._state.built:
             raise ValueError("Call build() first.")
 
     def _resolve_split(self, payload: dict) -> str:
+        """
+        Resolve which split should be compared for one report payload.
+
+        Args:
+            payload: Built report payload.
+
+        Returns:
+            Split name selected for comparison.
+        """
         metric_values = payload["metrics"]
         if not metric_values:
             raise ValueError("Compared reports must include built metrics.")
@@ -174,6 +258,16 @@ class ComparisonReport:
     def _get_common_scalar_metric_ids(
         self, payloads: list[dict], splits: list[str]
     ) -> list[str]:
+        """
+        Return metric ids that can be compared as scalar values for all reports.
+
+        Args:
+            payloads: Built report payloads.
+            splits: Resolved split name for each payload.
+
+        Returns:
+            Metric ids common to all reports and extractable as scalars.
+        """
         baseline_metrics = payloads[0]["metrics"]
         common_ids = []
         for metric_id in baseline_metrics:
@@ -192,6 +286,18 @@ class ComparisonReport:
         descriptions: list[str | None],
         splits: list[str],
     ) -> list[dict]:
+        """
+        Build display rows describing each compared model.
+
+        Args:
+            payloads: Built report payloads.
+            model_keys: Unique display keys for each model.
+            descriptions: Optional descriptions from the source reports.
+            splits: Resolved split name for each report.
+
+        Returns:
+            List of model row dictionaries for rendering.
+        """
         rows = []
         for i, (payload, model_key, description, split) in enumerate(
             zip(payloads, model_keys, descriptions, splits)
@@ -200,6 +306,8 @@ class ComparisonReport:
             cv_folds = payload.get("data", {}).get("cv_folds")
             if split == "cv" and cv_folds is not None:
                 data_label = f"{cv_folds}-fold CV"
+            elif split == "cv":
+                data_label = "CV Predictions"
             elif split == "test":
                 data_label = "Train/Test Split"
             else:
@@ -209,7 +317,11 @@ class ComparisonReport:
             best_params = tuning_summary.get("best_params", {})
             if isinstance(best_params, dict) and best_params:
                 tuned_count = len(best_params)
-                tuned_label = f"{tuned_count} param" if tuned_count == 1 else f"{tuned_count} params"
+                tuned_label = (
+                    f"{tuned_count} param"
+                    if tuned_count == 1
+                    else f"{tuned_count} params"
+                )
             else:
                 tuned_label = "None"
             rows.append(
@@ -231,6 +343,15 @@ class ComparisonReport:
         return rows
 
     def _build_model_keys(self, payloads: list[dict]) -> list[str]:
+        """
+        Create unique model keys for display and metric lookups.
+
+        Args:
+            payloads: Built report payloads.
+
+        Returns:
+            Unique model keys, preserving model names when possible.
+        """
         model_names = [payload["model"]["name"] for payload in payloads]
         name_counts = Counter(model_names)
         seen_counts: dict[str, int] = {}
@@ -254,6 +375,18 @@ class ComparisonReport:
         metric_ids: list[str],
         splits: list[str],
     ) -> list[dict]:
+        """
+        Build comparison rows for each shared scalar metric.
+
+        Args:
+            payloads: Built report payloads.
+            model_keys: Unique display keys for each model.
+            metric_ids: Metric ids to compare.
+            splits: Resolved split name for each report.
+
+        Returns:
+            List of metric row dictionaries with values, deltas, and best model.
+        """
         rows = []
         baseline_key = model_keys[0]
         for metric_id in metric_ids:
@@ -289,6 +422,15 @@ class ComparisonReport:
         return rows
 
     def _build_plots(self, splits: list[str]) -> list[dict]:
+        """
+        Build grouped comparison plots for compatible model types.
+
+        Args:
+            splits: Resolved split name for each report.
+
+        Returns:
+            Plot groups, each containing one plot card per compared report.
+        """
         plot_ids = self._get_comparison_plot_ids()
         if not plot_ids:
             return []
@@ -301,7 +443,11 @@ class ComparisonReport:
                 plots = report._state.handler.build_plots(
                     split_payload,
                     self.theme,
-                    exclude=[candidate for candidate in report._state.handler._plots() if candidate != plot_id],
+                    exclude=[
+                        candidate
+                        for candidate in report._state.handler._plots()
+                        if candidate != plot_id
+                    ],
                     cmap=self.cmap,
                 )
                 plot_data = plots.get(plot_id)
@@ -309,7 +455,7 @@ class ComparisonReport:
                     continue
                 if fig_axes := plot_data["fig"].axes:
                     fig_axes[0].set_title(
-                        f'{model["title_name"]} [Model {model["index"] + 1}]'
+                        f"{model['title_name']} [Model {model['index'] + 1}]"
                     )
                 cards.append(
                     {
@@ -329,6 +475,12 @@ class ComparisonReport:
         return plot_groups
 
     def _get_comparison_plot_ids(self) -> list[str]:
+        """
+        Return plot ids appropriate for the compared model type.
+
+        Returns:
+            Plot ids to render for the comparison.
+        """
         if self._state.model_type == "Classification":
             return ["confusion_matrix", "per_class_metrics"]
         if self._state.model_type == "Regression":
@@ -336,6 +488,16 @@ class ComparisonReport:
         return []
 
     def _serialize_plots(self, image_dir: str | None = None) -> list[dict]:
+        """
+        Convert comparison plot figures to embedded images or files.
+
+        Args:
+            image_dir: Optional directory to write plot image files. When omitted,
+                plots are embedded as base64 strings.
+
+        Returns:
+            Serialized plot group payloads for renderers.
+        """
         return [
             {
                 "plot_id": group["plot_id"],
@@ -371,6 +533,16 @@ class ComparisonReport:
         ]
 
     def _can_extract_metric_value(self, metric_payload: dict, split: str) -> bool:
+        """
+        Return whether a metric payload has a comparable scalar for a split.
+
+        Args:
+            metric_payload: Built metric payload from a report.
+            split: Split name to extract.
+
+        Returns:
+            ``True`` when the metric can be converted to a scalar value.
+        """
         try:
             self._get_metric_value(metric_payload, split)
         except (KeyError, TypeError, ValueError):
@@ -378,12 +550,31 @@ class ComparisonReport:
         return True
 
     def _get_metric_value(self, metric_payload: dict, split: str) -> float:
+        """
+        Extract a scalar metric value for a split.
+
+        Args:
+            metric_payload: Built metric payload from a report.
+            split: Split name to extract.
+
+        Returns:
+            Scalar metric value. For fold-summary CV metrics, this is the mean.
+        """
         value = metric_payload["values"][split]
-        if split == "cv":
+        if split == "cv" and isinstance(value, dict):
             return float(value["mean"])
         return float(value)
 
     def _get_report_description(self, payload: dict) -> str | None:
+        """
+        Extract a report description for comparison model cards.
+
+        Args:
+            payload: Built report payload.
+
+        Returns:
+            Description string when present.
+        """
         meta_description = payload.get("meta", {}).get("description")
         if meta_description:
             return str(meta_description)

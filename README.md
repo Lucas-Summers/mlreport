@@ -39,16 +39,34 @@ python -m pip install -e .
 from mlreport import Report
 
 report = Report(
-    model,  # fitted sklearn model
+    model,  # fitted sklearn or custom model
     title="Model Report",
     author="Your Name",
     description="Optional description",
     theme="light",  # or "dark"
-    cmap="viridis" # or any matplotlib colormap
+    cmap="viridis", # or any matplotlib colormap
+    model_type=None, # optional: "classification" or "regression"
+    model_params=None # optional dict of hyperparameters
 )
 ```
 
-**Note:** only regression and classification models are currently supported.
+When `model_type` is provided, it is used to choose the report type. Otherwise,
+scikit-learn model types are detected automatically. When `model_params` is
+provided, those parameters are shown in the report. Otherwise, scikit-learn
+models use `get_params()`.
+
+For custom models that do not implement `get_params()`, pass both
+`model_type` and `model_params`:
+
+```python
+report = Report(
+    custom_model,
+    model_type="classification",
+    model_params={"threshold": 0.4},
+)
+```
+
+**Note:** only regression and classification reports are currently supported.
 
 ### 2) Add evaluation data (choose one path)
 
@@ -64,7 +82,17 @@ OR cross-validation:
 ```python
 report.add_crossval(X, y, cv=cv)          # y_pred computed via cross_val_predict
 # or
-report.add_crossval(X, y, y_pred_cv, cv)  # provide your own OOF predictions
+report.add_crossval(X, y, y_pred_cv)      # provide your own OOF predictions
+```
+
+When `cv` is provided, fold-level metric summaries are shown. `cv` can be a
+splitter object or an integer fold count. For custom models, pass precomputed
+out-of-fold predictions. If you also want fold-level summaries, provide either
+the splitter used to create those predictions or one fold id per row:
+
+```python
+report.add_crossval(X, y, y_pred_cv, cv=cv)
+report.add_crossval(X, y, y_pred_cv, fold_ids=fold_ids)
 ```
 
 ### 3) Optionally add hyperparameter search results

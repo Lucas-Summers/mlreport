@@ -33,7 +33,7 @@
                     <table>
                         <tr><th>Name</th><td>{{ model.name }}</td></tr>
                         <tr><th>Type</th><td>{{ model.type | capitalize }}</td></tr>
-                        <tr><th>Sklearn</th><td>{{ model.version }}</td></tr>
+                        <tr><th>Sklearn</th><td>{{ model.sklearn }}</td></tr>
                         <tr><th>Parameter Count</th><td>{{ model.params | length }}</td></tr>
                     </table>
                 </section>
@@ -61,7 +61,7 @@
                         <tr>
                             <th>Class</th>
                             {% for split_name in data.splits.keys() %}
-                            <th class="numeric">{{ split_name | capitalize }}</th>
+                            <th class="numeric">{% if split_name == "cv" %}CV{% else %}{{ split_name | capitalize }}{% endif %}</th>
                             {% endfor %}
                             <th class="numeric">Overall %</th>
                         </tr>
@@ -148,13 +148,17 @@
                         {% endfor %}
                     </table>
                     {% else %}
-                    <h2>Metrics (Train/Test Split)</h2>
                     {% set split_names = metrics[metrics.keys() | list | first]["values"].keys() | reject("equalto", "per_class") | list %}
+                    {% if data.is_crossval %}
+                    <h2>Metrics (Cross-Validation Predictions)</h2>
+                    {% else %}
+                    <h2>Metrics (Train/Test Split)</h2>
+                    {% endif %}
                     <table>
                         <tr>
                             <th>Metric</th>
                             {% for split_name in split_names %}
-                            <th class="numeric">{{ split_name | capitalize }}</th>
+                            <th class="numeric">{% if split_name == "cv" %}CV{% else %}{{ split_name | capitalize }}{% endif %}</th>
                             {% endfor %}
                             {% if "train" in split_names and "test" in split_names %}
                             <th class="numeric">Gap</th>
@@ -188,7 +192,7 @@
 
                     {% if "precision_macro" in metrics and "per_class" in metrics["precision_macro"]["values"] %}
                     <h2 style="margin-top: 20px">Metrics (Per-Class)</h2>
-                    {% if data.cv_folds is not none %}
+                    {% if data.is_crossval %}
                     {% set p = metrics["precision_macro"]["values"]["per_class"]["cv"] %}
                     {% set r = metrics["recall_macro"]["values"]["per_class"]["cv"] %}
                     {% set f = metrics["f1_macro"]["values"]["per_class"]["cv"] %}
@@ -213,7 +217,7 @@
                     {% set p = metrics["precision_macro"]["values"]["per_class"][split_name] %}
                     {% set r = metrics["recall_macro"]["values"]["per_class"][split_name] %}
                     {% set f = metrics["f1_macro"]["values"]["per_class"][split_name] %}
-                    <h3>{{ split_name | capitalize }}</h3>
+                    <h3>{% if split_name == "cv" %}CV{% else %}{{ split_name | capitalize }}{% endif %}</h3>
                     <table>
                         <tr>
                             <th>Class</th>

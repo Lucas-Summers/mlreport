@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from numbers import Number
 from pathlib import Path
-from typing import cast
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn
 from sklearn.base import is_classifier, is_clusterer, is_regressor
-from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import check_cv, cross_val_predict
 
 from .handlers.base import ModelHandler
 from .handlers.classification import ClassificationHandler
@@ -40,11 +40,14 @@ class ReportState:
             "plots": {},
         }
     )
-    cv: object | None = None
+    is_crossval: bool = False
+    fold_ids: np.ndarray | None = None
     built: bool = False
 
 
 class Report:
+    """Build and render evaluation reports for fitted models or predictions."""
+
     def __init__(
         self,
         model,
@@ -53,15 +56,34 @@ class Report:
         description: str | None = None,
         theme: str = "light",
         cmap: str = "viridis",
+        model_type: str | None = None,
+        model_params: dict | None = None,
     ):
+        """
+        Initialize a report around a model and optional display metadata.
+
+        Args:
+            model: Fitted sklearn-compatible estimator or custom model object.
+            title: Optional report title.
+            author: Optional report author.
+            description: Optional report description.
+            theme: Render theme name.
+            cmap: Matplotlib colormap name for generated plots.
+            model_type: Explicit model type for custom models.
+            model_params: Optional parameter mapping for display.
+        """
         self.model = model
+        self.model_type = model_type
+        self.model_params = model_params
         self.title = title
         self.author = author
         self.description = description
         self.theme = theme
         self.cmap = cmap
 
-        self._state = ReportState(handler=self._get_handler(model))
+        self._state = ReportState(
+            handler=self._get_handler(model, model_type=model_type)
+        )
 
     def available_metrics(self) -> None:
         """
@@ -96,11 +118,18 @@ class Report:
         Returns:
             Self for method chaining.
         """
-        if self._state.cv is not None:
+        if self._state.is_crossval:
             raise ValueError("Cannot add train/test splits after add_crossval().")
 
         if y_pred is None:
-            y_pred = self.model.predict(X)
+            predict = getattr(self.model, "predict", None)
+            if not callable(predict):
+                raise ValueError(
+                    f"Model {type(self.model).__name__} does not expose predict(). "
+                    "Pass y_pred explicitly to add_split(..., y_pred=...)."
+                )
+
+            y_pred = np.asarray(predict(X))
 
         self._state.splits[name] = (
             np.asarray(X),
@@ -114,7 +143,8 @@ class Report:
         X: np.ndarray,
         y: np.ndarray,
         y_pred: np.ndarray | None = None,
-        cv=None,
+        cv: Any | None = None,
+        fold_ids: np.ndarray | None = None,
     ) -> Report:
         """
         Add a cross-validation prediction set.
@@ -123,7 +153,10 @@ class Report:
             X: Full feature matrix used for cross-validation.
             y: Full true target values.
             y_pred: Optional out-of-fold predictions aligned with y.
-            cv: Cross-validation splitter with split(X, y).
+            cv: Optional cross-validation splitter with split(X, y), fold
+                count, or iterable of (train_idx, test_idx) pairs.
+            fold_ids: Optional fold identifier for each row. Cannot be used
+                together with cv.
 
         Returns:
             Self for method chaining.
@@ -131,16 +164,35 @@ class Report:
         if self._state.splits:
             raise ValueError("Cannot call add_crossval() after add_split().")
 
-        if cv is None:
-            raise ValueError("cv must be provided for add_crossval().")
+        if cv is not None and fold_ids is not None:
+            raise ValueError("Pass either cv or fold_ids, not both.")
+
+        splits = None
+        fold_ids_arr = None
+        n_samples = len(y)
+
+        if cv is not None:
+            splits = self._materialize_cv_splits(cv, X, y)
+            fold_ids_arr = self._fold_ids_from_splits(n_samples, splits)
+        elif fold_ids is not None:
+            fold_ids_arr = self._validate_fold_ids(fold_ids, n_samples)
+            splits = self._splits_from_fold_ids(fold_ids_arr)
 
         if y_pred is None:
-            y_pred = cast(
-                np.ndarray,
-                np.asarray(cross_val_predict(self.model, X, y, cv=cv)),
-            )
+            if splits is None:
+                raise ValueError(
+                    "cv or fold_ids must be provided when y_pred is not provided."
+                )
+            y_pred = np.asarray(cross_val_predict(self.model, X, y, cv=splits))
+        else:
+            y_pred = np.asarray(y_pred)
+            if len(y_pred) != n_samples:
+                raise ValueError(
+                    "y_pred must contain one prediction for each target value."
+                )
 
-        self._state.cv = cv
+        self._state.is_crossval = True
+        self._state.fold_ids = fold_ids_arr
         self._state.splits = {
             "cv": (
                 np.asarray(X),
@@ -149,6 +201,116 @@ class Report:
             )
         }
         return self
+
+    def _materialize_cv_splits(
+        self, cv: Any, X: np.ndarray, y: np.ndarray
+    ) -> tuple[tuple[np.ndarray, np.ndarray], ...]:
+        """
+        Normalize a sklearn CV input into concrete train/test index arrays.
+
+        Args:
+            cv: Fold count, splitter object, or iterable of split pairs.
+            X: Feature matrix passed to the splitter.
+            y: Target values passed to the splitter.
+
+        Returns:
+            Tuple of ``(train_idx, test_idx)`` arrays.
+        """
+        splitter = check_cv(
+            cv,
+            y,
+            classifier=isinstance(self._state.handler, ClassificationHandler),
+        )
+        raw_splits = list(splitter.split(X, y))  # type: ignore
+
+        if not raw_splits:
+            raise ValueError("cv must produce at least one split.")
+
+        splits = []
+        for split_pair in raw_splits:
+            if len(split_pair) != 2:
+                raise ValueError("Each cv split must be a (train_idx, test_idx) pair.")
+            train_idx, test_idx = split_pair
+            splits.append(
+                (
+                    np.asarray(train_idx, dtype=int),
+                    np.asarray(test_idx, dtype=int),
+                )
+            )
+        return tuple(splits)
+
+    def _fold_ids_from_splits(
+        self,
+        n_samples: int,
+        splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+    ) -> np.ndarray:
+        """
+        Convert train/test splits into one held-out fold id per sample.
+
+        Args:
+            n_samples: Number of rows in the full evaluation set.
+            splits: Concrete CV splits.
+
+        Returns:
+            Array where each element is the held-out fold id for that row.
+        """
+        fold_ids = np.full(n_samples, -1, dtype=int)
+        seen = np.zeros(n_samples, dtype=bool)
+
+        for fold_idx, (_, test_idx) in enumerate(splits):
+            if test_idx.size == 0:
+                raise ValueError("cv test folds must not be empty.")
+            if np.any((test_idx < 0) | (test_idx >= n_samples)):
+                raise ValueError("cv test indices must be valid row positions.")
+            if np.any(seen[test_idx]):
+                raise ValueError("cv test folds must not overlap.")
+
+            seen[test_idx] = True
+            fold_ids[test_idx] = fold_idx
+
+        if not np.all(seen):
+            raise ValueError("cv must assign every sample to exactly one test fold.")
+
+        return self._validate_fold_ids(fold_ids, n_samples)
+
+    def _validate_fold_ids(self, fold_ids: np.ndarray, n_samples: int) -> np.ndarray:
+        """
+        Validate user-provided fold assignments for out-of-fold predictions.
+
+        Args:
+            fold_ids: Fold id per target row.
+            n_samples: Expected number of fold ids.
+
+        Returns:
+            The validated fold id array.
+        """
+        if fold_ids.ndim != 1:
+            raise ValueError("fold_ids must be a one-dimensional array.")
+        if len(fold_ids) != n_samples:
+            raise ValueError("fold_ids must contain one fold id per target value.")
+        if len(np.unique(fold_ids)) < 2:
+            raise ValueError("fold_ids must contain at least two folds.")
+        return fold_ids
+
+    def _splits_from_fold_ids(
+        self,
+        fold_ids: np.ndarray,
+    ) -> tuple[tuple[np.ndarray, np.ndarray], ...]:
+        """
+        Reconstruct train/test split pairs from row-level fold assignments.
+
+        Args:
+            fold_ids: Fold id per row.
+
+        Returns:
+            Tuple of ``(train_idx, test_idx)`` arrays.
+        """
+        row_indices = np.arange(len(fold_ids))
+        splits = []
+        for fold_id in np.unique(fold_ids):
+            test_mask = fold_ids == fold_id
+            splits.append((row_indices[~test_mask], row_indices[test_mask]))
+        return tuple(splits)
 
     def add_search(self, search_cv) -> Report:
         """
@@ -234,7 +396,7 @@ class Report:
         self._state.metrics = self._state.handler.build_metrics(
             self._state.splits,
             exclude_metrics or [],
-            cv=self._state.cv,
+            fold_ids=self._state.fold_ids,
         )
 
         self._state.plots = self._state.handler.build_plots(
@@ -418,6 +580,16 @@ class Report:
         return get_plot_colors(self.theme)
 
     def _get_search_score_column(self, cv_results: dict, search_cv) -> str:
+        """
+        Select the score column to use from a fitted search object's results.
+
+        Args:
+            cv_results: ``cv_results_`` mapping from a fitted search object.
+            search_cv: Fitted sklearn search object.
+
+        Returns:
+            Name of the selected mean test score column.
+        """
         refit_metric = getattr(search_cv, "refit", None)
         if isinstance(refit_metric, str):
             refit_column = f"mean_test_{refit_metric}"
@@ -436,6 +608,16 @@ class Report:
         raise ValueError("search_cv.cv_results_ does not contain mean_test_* scores.")
 
     def _get_search_metric_name(self, search_cv, score_column: str) -> str:
+        """
+        Infer a display name for the search scoring metric.
+
+        Args:
+            search_cv: Fitted sklearn search object.
+            score_column: Selected score column from ``cv_results_``.
+
+        Returns:
+            Human-readable scoring metric name.
+        """
         if score_column != "mean_test_score":
             return score_column.replace("mean_test_", "")
 
@@ -448,6 +630,15 @@ class Report:
         return "score"
 
     def _get_search_param_names(self, cv_results: dict) -> list[str]:
+        """
+        Return sorted hyperparameter names present in search candidates.
+
+        Args:
+            cv_results: ``cv_results_`` mapping from a fitted search object.
+
+        Returns:
+            Sorted list of parameter names found in ``params`` entries.
+        """
         params_list = list(cv_results.get("params", []))
         return sorted({name for params in params_list for name in params.keys()})
 
@@ -460,6 +651,20 @@ class Report:
         param_names: list[str],
         cmap: str,
     ) -> dict:
+        """
+        Build tuning visualizations for two searched hyperparameters.
+
+        Args:
+            cv_results: ``cv_results_`` mapping from a fitted search object.
+            score_column: Selected mean test score column.
+            metric_name: Display name for the search metric.
+            colors: Plot foreground and background colors.
+            param_names: Two tuned parameter names.
+            cmap: Matplotlib colormap name.
+
+        Returns:
+            Mapping of tuning plot ids to plot metadata.
+        """
         params_list = list(cv_results.get("params", []))
         if not params_list or score_column not in cv_results:
             return {}
@@ -582,6 +787,21 @@ class Report:
         plot_bg: str,
         cmap: str,
     ):
+        """
+        Build a 3D tuning plot for two numeric hyperparameters.
+
+        Args:
+            combos: Aggregated parameter combinations and mean scores.
+            param_a: First numeric parameter name.
+            param_b: Second numeric parameter name.
+            metric_name: Display name for the search metric.
+            plot_fg: Plot foreground color.
+            plot_bg: Plot background color.
+            cmap: Matplotlib colormap name.
+
+        Returns:
+            Matplotlib figure, or ``None`` when no numeric points are available.
+        """
         x_vals = []
         y_vals = []
         z_vals = []
@@ -635,6 +855,21 @@ class Report:
         plot_bg: str,
         cmap: str,
     ):
+        """
+        Build a line plot for one numeric and one categorical hyperparameter.
+
+        Args:
+            combos: Aggregated parameter combinations and mean scores.
+            numeric_param: Numeric parameter name for the x-axis.
+            categorical_param: Categorical parameter name for series groups.
+            metric_name: Display name for the search metric.
+            plot_fg: Plot foreground color.
+            plot_bg: Plot background color.
+            cmap: Matplotlib colormap name.
+
+        Returns:
+            Matplotlib figure, or ``None`` when no compatible data exists.
+        """
         series = {}
         x_values_set = set()
         for item in combos:
@@ -704,6 +939,21 @@ class Report:
         plot_bg: str,
         cmap: str,
     ):
+        """
+        Build a heatmap for two categorical hyperparameters.
+
+        Args:
+            combos: Aggregated parameter combinations and mean scores.
+            param_a: First categorical parameter name.
+            param_b: Second categorical parameter name.
+            metric_name: Display name for the search metric.
+            plot_fg: Plot foreground color.
+            plot_bg: Plot background color.
+            cmap: Matplotlib colormap name.
+
+        Returns:
+            Matplotlib figure, or ``None`` when no compatible data exists.
+        """
         x_lookup = {}
         y_lookup = {}
         for item in combos:
@@ -805,6 +1055,22 @@ class Report:
         cmap: str,
         top_n: int = 10,
     ):
+        """
+        Build a horizontal bar chart of the best tuning candidates.
+
+        Args:
+            combos: Aggregated parameter combinations and mean scores.
+            param_a: First tuned parameter name.
+            param_b: Second tuned parameter name.
+            metric_name: Display name for the search metric.
+            plot_fg: Plot foreground color.
+            plot_bg: Plot background color.
+            cmap: Matplotlib colormap name.
+            top_n: Maximum number of candidates to show.
+
+        Returns:
+            Matplotlib figure, or ``None`` when no candidates exist.
+        """
         if not combos:
             return None
 
@@ -840,29 +1106,78 @@ class Report:
         return fig
 
     def _is_numeric_param_value(self, value) -> bool:
+        """
+        Return whether a search parameter value should be plotted as numeric.
+
+        Args:
+            value: Parameter value from a search candidate.
+
+        Returns:
+            ``True`` for numeric non-boolean values.
+        """
         if isinstance(value, bool) or value is None:
             return False
         return isinstance(value, (Number, np.integer, np.floating))
 
-    def _get_handler(self, model) -> ModelHandler:
+    def _get_handler(self, model, model_type: str | None = None) -> ModelHandler:
         """
         Return the appropriate handler for the model type.
 
         Args:
-            model: Fitted scikit-learn compatible estimator.
+            model: Fitted model or scikit-learn compatible estimator.
+            model_type: Explicit model type for custom models. Sklearn models
+                are detected automatically.
 
         Returns:
             ModelHandler implementation matching the estimator type.
         """
-        if is_clusterer(model):
-            return ClusteringHandler()
-        elif is_classifier(model):
-            return ClassificationHandler()
-        elif is_regressor(model):
-            return RegressionHandler()
+        if model_type is not None:
+            return self._get_handler_from_model_type(model_type)
+
+        try:
+            if is_clusterer(model):
+                return ClusteringHandler()
+            elif is_classifier(model):
+                return ClassificationHandler()
+            elif is_regressor(model):
+                return RegressionHandler()
+        except AttributeError as exc:
+            raise ValueError(
+                f"Unsupported model type: {type(model).__name__}. "
+                "Pass model_type='classification' or model_type='regression' "
+                "for custom models."
+            ) from exc
+
         raise ValueError(f"Unsupported model type: {type(model).__name__}")
 
+    def _get_handler_from_model_type(self, model_type: str) -> ModelHandler:
+        """
+        Resolve an explicit model type string to a handler instance.
+
+        Args:
+            model_type: User-provided model type label.
+
+        Returns:
+            Handler for the requested model type.
+        """
+        normalized_type = model_type.lower().replace("-", "_").replace(" ", "_")
+        if normalized_type in {"classification", "classifier"}:
+            return ClassificationHandler()
+        if normalized_type in {"regression", "regressor"}:
+            return RegressionHandler()
+
+        raise ValueError(
+            f"Unsupported model_type: {model_type!r}. "
+            "Expected 'classification' or 'regression'."
+        )
+
     def _get_model_display_name(self) -> str:
+        """
+        Return the model name shown in the report.
+
+        Returns:
+            Final pipeline step class name, or the model class name.
+        """
         final_step = getattr(self.model, "steps", None)
         if isinstance(final_step, list) and final_step:
             last_estimator = final_step[-1][1]
@@ -870,6 +1185,15 @@ class Report:
         return self.model.__class__.__name__
 
     def _serialize_param_value(self, value):
+        """
+        Convert model parameter values into renderer-friendly values.
+
+        Args:
+            value: Raw parameter value from ``get_params()`` or ``model_params``.
+
+        Returns:
+            Serialized parameter value suitable for text and template output.
+        """
         if hasattr(value, "get_params") and not isinstance(value, type):
             return value.__class__.__name__
 
@@ -890,11 +1214,56 @@ class Report:
         return value
 
     def _get_model_params(self) -> dict:
-        return {
-            key: self._serialize_param_value(value)
-            for key, value in self.model.get_params().items()
-            if key != "steps"
-        }
+        """
+        Return serialized parameters for the report model.
+
+        Returns:
+            Mapping of parameter names to display values.
+        """
+        if self.model_params is not None:
+            return {
+                key: self._serialize_param_value(value)
+                for key, value in self.model_params.items()
+            }
+
+        if hasattr(self.model, "get_params"):
+            return {
+                key: self._serialize_param_value(value)
+                for key, value in self.model.get_params().items()
+                if key != "steps"
+            }
+
+        raise ValueError(
+            f"Model {type(self.model).__name__} does not expose get_params(). "
+            "Pass model_params={...} for custom models."
+        )
+
+    def _is_sklearn_model(self) -> bool:
+        """
+        Return whether the model is recognized by sklearn type checks.
+
+        Returns:
+            ``True`` when sklearn identifies the model as supported.
+        """
+        try:
+            return (
+                is_clusterer(self.model)
+                or is_classifier(self.model)
+                or is_regressor(self.model)
+            )
+        except AttributeError:
+            return False
+
+    def _get_sklearn_summary(self) -> str:
+        """
+        Return a display label for sklearn compatibility.
+
+        Returns:
+            Versioned sklearn label for sklearn models, otherwise ``False``.
+        """
+        if self._is_sklearn_model():
+            return f"True (v{sklearn.__version__})"
+        return "False"
 
     def _to_dict(self) -> dict:
         """
@@ -933,10 +1302,8 @@ class Report:
             }
 
         cv_folds = None
-        if self._state.cv is not None:
-            get_n_splits = getattr(self._state.cv, "get_n_splits", None)
-            if callable(get_n_splits):
-                cv_folds = get_n_splits(X, y)
+        if self._state.fold_ids is not None:
+            cv_folds = int(len(np.unique(self._state.fold_ids)))
 
         return {
             "meta": {
@@ -948,7 +1315,7 @@ class Report:
             "model": {
                 "name": self._get_model_display_name(),
                 "type": self._state.handler.__class__.__name__.replace("Handler", ""),
-                "version": sklearn.__version__,
+                "sklearn": self._get_sklearn_summary(),
                 "params": self._get_model_params(),
             },
             "data": {
@@ -956,6 +1323,7 @@ class Report:
                 "splits": splits_counts,
                 "total": sum(splits_counts.values()),
                 "cv_folds": cv_folds,
+                "is_crossval": self._state.is_crossval,
                 "class_distribution": class_distribution,
                 "class_percentages": class_percentages,
             },
