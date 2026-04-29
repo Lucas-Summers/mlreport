@@ -120,7 +120,11 @@ Metrics (Train/Test Split)
 {% endif %}
 {% set metric_rows.values = metric_rows.values + [row.values] %}
 {% endfor %}
-{{ txt_table(metric_headers.values, metric_rows.values, colalign=["left", "right", "right", "right", "right"]) }}
+{{ txt_table(
+    metric_headers.values,
+    metric_rows.values,
+    colalign=["left"] + (["right"] * ((metric_headers.values | length) - 1))
+) }}
 {% if "train" in split_names and "test" in split_names %}
 Gap = Train - Test. Large positive values may indicate overfitting.
 {% endif %}

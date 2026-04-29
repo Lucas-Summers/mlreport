@@ -129,6 +129,10 @@ class ComparisonReport:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError(
+                "path is required. Pass an output path like 'comparison.html'."
+            )
 
         context = self.to_dict()
         context["plots"] = self._serialize_plots()
@@ -147,6 +151,10 @@ class ComparisonReport:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError(
+                "path is required. Pass an output path like 'comparison.pdf'."
+            )
 
         context = self.to_dict()
         context["plots"] = self._serialize_plots()
@@ -164,6 +172,10 @@ class ComparisonReport:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError(
+                "path is required. Pass an output path like 'comparison.json'."
+            )
 
         render_json("comparison", self.theme, self.to_dict(), path=path)
 
@@ -181,6 +193,10 @@ class ComparisonReport:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError(
+                "path is required. Pass an output path like 'comparison.md'."
+            )
 
         if image_dir is None:
             image_dir = str(Path(path).parent / "images")

@@ -441,6 +441,8 @@ class Report:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError("path is required. Pass an output path like 'report.html'.")
 
         plots_with_images = {
             plot_id: {
@@ -476,6 +478,8 @@ class Report:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError("path is required. Pass an output path like 'report.pdf'.")
 
         plots_with_images = {
             plot_id: {
@@ -510,6 +514,8 @@ class Report:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError("path is required. Pass an output path like 'report.json'.")
 
         data = self._to_dict()
         data.pop("plots", None)
@@ -532,6 +538,8 @@ class Report:
             Self for method chaining.
         """
         self._require_built()
+        if path is None:
+            raise TypeError("path is required. Pass an output path like 'report.md'.")
 
         if image_dir is None:
             image_dir = str(Path(path).parent / "images")

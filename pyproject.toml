@@ -38,9 +38,14 @@ dependencies = [
     "numpy",
     "matplotlib",
     "scikit-learn",
+    "scipy",
     "jinja2",
     "tabulate",
     "weasyprint",
+]
+
+[project.optional-dependencies]
+dev = [
     "pandas",
     "jupyterlab",
 ]
