@@ -114,11 +114,25 @@
                 {% endif %}
             </div>
 
+            {% if not model_reports %}
             <footer>
                 Generated at {{ meta.generated_at }} by
                 <a href="https://github.com/Lucas-Summers/mlreport">mlreport</a>
             </footer>
+            {% endif %}
         </div>
+
+        {% if model_reports %}
+        <div class="model-reports">
+            {% for model_report in model_reports %}
+            {{ model_report | safe }}
+            {% endfor %}
+        </div>
+        <footer>
+            Generated at {{ meta.generated_at }} by
+            <a href="https://github.com/Lucas-Summers/mlreport">mlreport</a>
+        </footer>
+        {% endif %}
 
         <div class="lightbox" onclick="closeLightbox()">
             <img src="" alt="Enlarged plot" />

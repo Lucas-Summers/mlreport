@@ -85,6 +85,35 @@
     cursor: pointer;
 }
 
+.model-reports {
+    margin-top: 40px;
+}
+
+.model-reports .model-report-container {
+    max-width: 920px;
+    margin: 40px auto 0;
+}
+
+.model-reports .model-report-container:first-child {
+    margin-top: 0;
+}
+
+.model-report-container .plots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 16px;
+}
+
+.model-report-container .plot-card img {
+    width: 100%;
+    aspect-ratio: 6 / 5;
+    display: block;
+    border-radius: 8px;
+    cursor: pointer;
+    object-fit: contain;
+    border: 1px solid var(--plot-border);
+}
+
 .lightbox {
     display: none;
     position: fixed;
@@ -139,8 +168,30 @@
         text-align: center;
     }
 
+    .model-reports {
+        margin-top: 0;
+    }
+
+    .model-report-container {
+        break-before: page;
+        page-break-before: always;
+    }
+
+    .model-reports .model-report-container,
+    .model-reports .model-report-container:first-child {
+        margin-top: -40px;
+    }
+
     .comparison-plots-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .model-report-container .plots-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .model-report-container .plot-card img {
+        height: 280px;
     }
 
     .lightbox {

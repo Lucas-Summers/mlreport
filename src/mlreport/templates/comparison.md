@@ -45,6 +45,15 @@ Metrics may be drawn from different evaluation splits across models.
 {% endfor %}
 {% endif %}
 
+{% if model_reports %}
+{% for model_report in model_reports %}
+---
+
+{{ model_report }}
+
+{% endfor %}
+{% endif %}
+
 ---
 
 *Generated at {{ meta.generated_at }} by [mlreport](https://github.com/Lucas-Summers/mlreport)*

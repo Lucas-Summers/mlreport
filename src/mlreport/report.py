@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from numbers import Number
@@ -430,19 +431,22 @@ class Report:
             print(content)
         return self
 
-    def to_html(self, path: str) -> Report:
+    def to_html(
+        self, path: str | None = None, title_prefix: str | None = None
+    ) -> Report | str:
         """
         Render report to HTML.
 
         Args:
-            path: Output file path for the HTML report.
+            path: Optional output file path for the HTML report. When omitted,
+                the rendered HTML string is returned.
+            title_prefix: Optional prefix to prepend to the rendered title.
 
         Returns:
-            Self for method chaining.
+            Self for method chaining when written to a path, otherwise the
+            rendered HTML string.
         """
         self._require_built()
-        if path is None:
-            raise TypeError("path is required. Pass an output path like 'report.html'.")
 
         plots_with_images = {
             plot_id: {
@@ -453,6 +457,11 @@ class Report:
         }
 
         context = self._to_dict()
+        if title_prefix:
+            meta = dict(context["meta"])
+            title = meta.get("title") or f"Report - {context['model']['name']}"
+            meta["title"] = f"{title_prefix}{title}"
+            context["meta"] = meta
         context["plots"] = plots_with_images
         context.setdefault("tuning", {})
         context["tuning"]["plots"] = {
@@ -463,8 +472,13 @@ class Report:
             for plot_id, plot_data in self._state.tuning["plots"].items()
         }
 
-        render_html("report", self.theme, context, path=path)
+        if path is None:
+            content = render_html("report", self.theme, context, path=None)
+            if not isinstance(content, str):
+                raise TypeError("render_html() did not return HTML content.")
+            return content
 
+        render_html("report", self.theme, context, path=path)
         return self
 
     def to_pdf(self, path: str) -> Report:
@@ -503,48 +517,64 @@ class Report:
         render_pdf("report", self.theme, context, path=path)
         return self
 
-    def to_json(self, path: str) -> Report:
+    def to_json(
+        self, path: str | None = None, title_prefix: str | None = None
+    ) -> Report | str:
         """
         Render report to JSON.
 
         Args:
-            path: Output file path for the JSON report.
+            path: Optional output file path for the JSON report. When omitted,
+                the rendered JSON string is returned.
+            title_prefix: Optional prefix to prepend to the rendered title.
 
         Returns:
-            Self for method chaining.
+            Self for method chaining when written to a path, otherwise the
+            rendered JSON string.
         """
         self._require_built()
-        if path is None:
-            raise TypeError("path is required. Pass an output path like 'report.json'.")
 
         data = self._to_dict()
+        if title_prefix:
+            meta = dict(data["meta"])
+            title = meta.get("title") or f"Report - {data['model']['name']}"
+            meta["title"] = f"{title_prefix}{title}"
+            data["meta"] = meta
         data.pop("plots", None)
         if isinstance(data.get("tuning"), dict):
             data["tuning"].pop("plots", None)
 
-        render_json("report", self.theme, data, path=path)
+        if path is None:
+            return json.dumps(data, indent=4)
 
+        render_json("report", self.theme, data, path=path)
         return self
 
-    def to_md(self, path: str, image_dir: str | None = None) -> Report:
+    def to_md(
+        self,
+        path: str | None = None,
+        image_dir: str | None = None,
+        title_prefix: str | None = None,
+    ) -> Report | str:
         """
         Render report to Markdown.
 
         Args:
-            path: Output file path for the Markdown report.
+            path: Optional output file path for the Markdown report. When
+                omitted, the rendered Markdown string is returned.
             image_dir: Directory to store exported plot images.
+            title_prefix: Optional prefix to prepend to the rendered title.
 
         Returns:
-            Self for method chaining.
+            Self for method chaining when written to a path, otherwise the
+            rendered Markdown string.
         """
         self._require_built()
-        if path is None:
-            raise TypeError("path is required. Pass an output path like 'report.md'.")
 
         if image_dir is None:
-            image_dir = str(Path(path).parent / "images")
+            image_dir = str(Path(path).parent / "images") if path else "images"
 
-        Path(image_dir).mkdir(exist_ok=True)
+        Path(image_dir).mkdir(parents=True, exist_ok=True)
 
         plots_with_paths = {}
         for plot_id, plot_data in self._state.plots.items():
@@ -556,6 +586,11 @@ class Report:
             }
 
         context = self._to_dict()
+        if title_prefix:
+            meta = dict(context["meta"])
+            title = meta.get("title") or f"Report - {context['model']['name']}"
+            meta["title"] = f"{title_prefix}{title}"
+            context["meta"] = meta
         context["plots"] = plots_with_paths
         context.setdefault("tuning", {})
         tuning_plot_paths = {}
@@ -568,8 +603,13 @@ class Report:
             }
         context["tuning"]["plots"] = tuning_plot_paths
 
-        render_md("report", self.theme, context, path=path)
+        if path is None:
+            content = render_md("report", self.theme, context, path=None)
+            if not isinstance(content, str):
+                raise TypeError("render_md() did not return Markdown content.")
+            return content
 
+        render_md("report", self.theme, context, path=path)
         return self
 
     def _require_built(self) -> None:

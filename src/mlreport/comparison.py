@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -118,34 +119,46 @@ class ComparisonReport:
             print(content)
         return self
 
-    def to_html(self, path: str) -> ComparisonReport:
+    def to_html(
+        self, path: str | None = None, include_model_reports: bool = True
+    ) -> ComparisonReport | str:
         """
         Render the comparison report to HTML.
 
         Args:
-            path: Output file path.
+            path: Optional output file path. When omitted, the rendered HTML
+                string is returned.
+            include_model_reports: Whether to append each source model report
+                after the comparison report.
 
         Returns:
-            Self for method chaining.
+            Self for method chaining when written to a path, otherwise the
+            rendered HTML string.
         """
         self._require_built()
-        if path is None:
-            raise TypeError(
-                "path is required. Pass an output path like 'comparison.html'."
-            )
 
         context = self.to_dict()
         context["plots"] = self._serialize_plots()
-        render_html("comparison", self.theme, context, path=path)
+        context["model_reports"] = (
+            self._render_model_report_html_fragments() if include_model_reports else []
+        )
+        if path is None:
+            content = render_html("comparison", self.theme, context, path=None)
+            if not isinstance(content, str):
+                raise TypeError("render_html() did not return HTML content.")
+            return content
 
+        render_html("comparison", self.theme, context, path=path)
         return self
 
-    def to_pdf(self, path: str) -> ComparisonReport:
+    def to_pdf(self, path: str, include_model_reports: bool = True) -> ComparisonReport:
         """
         Render the comparison report to PDF.
 
         Args:
             path: Output file path.
+            include_model_reports: Whether to append each source model report
+                after the comparison report.
 
         Returns:
             Self for method chaining.
@@ -158,55 +171,82 @@ class ComparisonReport:
 
         context = self.to_dict()
         context["plots"] = self._serialize_plots()
+        context["model_reports"] = (
+            self._render_model_report_html_fragments() if include_model_reports else []
+        )
         render_pdf("comparison", self.theme, context, path=path)
         return self
 
-    def to_json(self, path: str) -> ComparisonReport:
+    def to_json(
+        self, path: str | None = None, include_model_reports: bool = True
+    ) -> ComparisonReport | str:
         """
         Render the comparison report to JSON.
 
         Args:
-            path: Output file path.
+            path: Optional output file path. When omitted, the rendered JSON
+                string is returned.
+            include_model_reports: Whether to include each source model report
+                in a ``model_reports`` object keyed by model index.
 
         Returns:
-            Self for method chaining.
+            Self for method chaining when written to a path, otherwise the
+            rendered JSON string.
         """
         self._require_built()
-        if path is None:
-            raise TypeError(
-                "path is required. Pass an output path like 'comparison.json'."
-            )
 
-        render_json("comparison", self.theme, self.to_dict(), path=path)
+        data = self.to_dict()
+        if include_model_reports:
+            data["model_reports"] = self._render_model_report_json_payloads()
+
+        if path is None:
+            return json.dumps(data, indent=4)
+
+        render_json("comparison", self.theme, data, path=path)
 
         return self
 
-    def to_md(self, path: str, image_dir: str | None = None) -> ComparisonReport:
+    def to_md(
+        self,
+        path: str | None = None,
+        image_dir: str | None = None,
+        include_model_reports: bool = True,
+    ) -> ComparisonReport | str:
         """
         Render the comparison report to Markdown.
 
         Args:
-            path: Output file path.
+            path: Optional output file path. When omitted, the rendered
+                Markdown string is returned.
             image_dir: Optional directory for exported plot images.
+            include_model_reports: Whether to append each source model report
+                after the comparison report.
 
         Returns:
-            Self for method chaining.
+            Self for method chaining when written to a path, otherwise the
+            rendered Markdown string.
         """
         self._require_built()
-        if path is None:
-            raise TypeError(
-                "path is required. Pass an output path like 'comparison.md'."
-            )
 
         if image_dir is None:
-            image_dir = str(Path(path).parent / "images")
+            image_dir = str(Path(path).parent / "images") if path else "images"
 
-        Path(image_dir).mkdir(exist_ok=True)
+        Path(image_dir).mkdir(parents=True, exist_ok=True)
 
         context = self.to_dict()
         context["plots"] = self._serialize_plots(image_dir)
-        render_md("comparison", self.theme, context, path=path)
+        context["model_reports"] = (
+            self._render_model_report_md_fragments(image_dir)
+            if include_model_reports
+            else []
+        )
+        if path is None:
+            content = render_md("comparison", self.theme, context, path=None)
+            if not isinstance(content, str):
+                raise TypeError("render_md() did not return Markdown content.")
+            return content
 
+        render_md("comparison", self.theme, context, path=path)
         return self
 
     def to_dict(self) -> dict:
@@ -547,6 +587,125 @@ class ComparisonReport:
             }
             for group in self._state.plots
         ]
+
+    def _render_model_report_html_fragments(self) -> list[str]:
+        """
+        Render source model reports as HTML fragments for appended HTML output.
+
+        Returns:
+            List of report container HTML fragments.
+        """
+        fragments = []
+        for index, report in enumerate(self.reports):
+            html = report.to_html(title_prefix=f"[Model {index + 1}] ")
+            if not isinstance(html, str):
+                raise TypeError("Report.to_html() did not return HTML content.")
+            fragments.append(self._extract_model_report_container(html))
+        return fragments
+
+    def _render_model_report_json_payloads(self) -> dict[str, dict]:
+        """
+        Render source model reports as JSON payloads for comparison JSON output.
+
+        Returns:
+            Mapping from ``Model X`` keys to report JSON payloads.
+        """
+        payloads = {}
+        for index, report in enumerate(self.reports):
+            model_key = f"Model {index + 1}"
+            content = report.to_json(title_prefix=f"[{model_key}] ")
+            if not isinstance(content, str):
+                raise TypeError("Report.to_json() did not return JSON content.")
+            payloads[model_key] = json.loads(content)
+        return payloads
+
+    def _render_model_report_md_fragments(self, image_dir: str) -> list[str]:
+        """
+        Render source model reports as Markdown fragments for appended MD output.
+
+        Args:
+            image_dir: Base directory for exported model report plot images.
+
+        Returns:
+            List of model report Markdown fragments.
+        """
+        fragments = []
+        for index, report in enumerate(self.reports):
+            model_key = f"Model {index + 1}"
+            content = report.to_md(
+                image_dir=str(Path(image_dir) / f"model_{index + 1}"),
+                title_prefix=f"[{model_key}] ",
+            )
+            if not isinstance(content, str):
+                raise TypeError("Report.to_md() did not return Markdown content.")
+            fragments.append(self._remove_report_md_footer(content))
+        return fragments
+
+    def _extract_model_report_container(self, html: str) -> str:
+        """
+        Extract the visible report container from a full report HTML document.
+
+        Args:
+            html: Full rendered report HTML.
+
+        Returns:
+            HTML fragment containing the model report container.
+        """
+        start_marker = '<div class="container">'
+        start = html.find(start_marker)
+        if start == -1:
+            return html
+
+        lightbox_marker = '<div class="lightbox"'
+        end = html.find(lightbox_marker, start)
+        if end == -1:
+            end = html.rfind("</body>")
+        if end == -1:
+            end = len(html)
+
+        fragment = html[start:end].strip()
+        fragment = self._remove_report_footer(fragment)
+        return fragment.replace(
+            start_marker,
+            '<div class="container model-report-container">',
+            1,
+        )
+
+    def _remove_report_footer(self, html: str) -> str:
+        """
+        Remove the standalone report footer from an appended report fragment.
+
+        Args:
+            html: Extracted report container HTML.
+
+        Returns:
+            Report container HTML without its footer block.
+        """
+        footer_start = html.rfind("<footer>")
+        footer_end = html.rfind("</footer>")
+        if footer_start == -1 or footer_end == -1 or footer_end < footer_start:
+            return html
+        return (
+            html[:footer_start].rstrip()
+            + "\n"
+            + html[footer_end + len("</footer>") :].lstrip()
+        )
+
+    def _remove_report_md_footer(self, markdown: str) -> str:
+        """
+        Remove the standalone report footer from an appended Markdown fragment.
+
+        Args:
+            markdown: Rendered report Markdown.
+
+        Returns:
+            Markdown without the trailing generated footer block.
+        """
+        footer_marker = "\n---\n\n*Generated at "
+        footer_start = markdown.rfind(footer_marker)
+        if footer_start == -1:
+            return markdown.strip()
+        return markdown[:footer_start].rstrip()
 
     def _can_extract_metric_value(self, metric_payload: dict, split: str) -> bool:
         """
