@@ -1,4 +1,0 @@
-pandas
-tqdm
-scikit-learn
-matplotlib

@@ -127,6 +127,15 @@ report.to_json("file.json")
 report.to_pdf("file.pdf")
 ```
 
+HTML, Markdown, and JSON exports can also be rendered directly as strings by
+omitting the path:
+
+```python
+html = report.to_html()
+markdown = report.to_md()
+json_text = report.to_json()
+```
+
 Themes are now stylesheet-based. The built-in `light` and `dark` themes select
 different CSS files while sharing the same report template.
 
@@ -164,3 +173,21 @@ comparison.to_pdf("comparison.pdf")
 ```
 
 `reports[0]` is treated as the baseline model when displaying deltas.
+
+Comparison HTML, Markdown, JSON, and PDF exports include the individual model
+reports by default. Disable that with `include_model_reports=False`:
+
+```python
+comparison.to_html("comparison.html", include_model_reports=False)
+comparison.to_md("comparison.md", include_model_reports=False)
+comparison.to_json("comparison.json", include_model_reports=False)
+comparison.to_pdf("comparison.pdf", include_model_reports=False)
+```
+
+Comparison HTML, Markdown, and JSON can also be rendered directly as strings:
+
+```python
+html = comparison.to_html()
+markdown = comparison.to_md()
+json_text = comparison.to_json()
+```
